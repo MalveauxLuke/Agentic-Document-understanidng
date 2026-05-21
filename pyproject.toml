@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agenticdocai-sleuth-static"
+version = "0.1.0"
+description = "Static SLEUTH-style long-document understanding baseline."
+requires-python = ">=3.10"
+dependencies = [
+  "pymupdf",
+  "pydantic",
+  "pyyaml",
+  "rank-bm25",
+  "pillow",
+  "python-dotenv",
+  "requests",
+  "tqdm",
+  "pytest",
+  "numpy",
+  "transformers",
+  "accelerate",
+  "qwen-vl-utils",
+  "safetensors",
+  "sentencepiece",
+  "protobuf",
+]
+
+[tool.setuptools.packages.find]
+include = ["sleuth*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

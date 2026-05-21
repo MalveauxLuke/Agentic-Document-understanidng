@@ -1,0 +1,16 @@
+pymupdf
+pydantic
+pyyaml
+rank-bm25
+pillow
+python-dotenv
+requests
+tqdm
+pytest
+numpy
+transformers
+accelerate
+qwen-vl-utils
+safetensors
+sentencepiece
+protobuf

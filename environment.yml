@@ -1,0 +1,28 @@
+name: sleuth-static
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - pip:
+      - transformers
+      - accelerate
+      - qwen-vl-utils
+      - pymupdf
+      - pillow
+      - pydantic
+      - pyyaml
+      - rank-bm25
+      - numpy
+      - tqdm
+      - pytest
+      - python-dotenv
+      - requests
+      - safetensors
+      - sentencepiece
+      - protobuf
