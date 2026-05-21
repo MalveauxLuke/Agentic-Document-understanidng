@@ -1,0 +1,15 @@
+{
+  "dataset": "yubo2333/MMLongBench-Doc",
+  "dataset_url": "https://huggingface.co/datasets/yubo2333/MMLongBench-Doc",
+  "split": "train",
+  "row_index": 949,
+  "doc_id": "a4f3ced0696009fec3179f493e4f28c4.pdf",
+  "pdf_path": "samples/mmlongbench_doc/a4f3ced0696009fec3179f493e4f28c4.pdf",
+  "source_pdf_url": "https://huggingface.co/datasets/yubo2333/MMLongBench-Doc/resolve/main/documents/a4f3ced0696009fec3179f493e4f28c4.pdf",
+  "doc_type": "Administration/Industry file",
+  "question": "WHAT IS USCA CASE NUMBER?",
+  "answer": "21-13199",
+  "evidence_pages": [1],
+  "evidence_sources": ["Pure-text (Plain-text)"],
+  "answer_format": "Str"
+}

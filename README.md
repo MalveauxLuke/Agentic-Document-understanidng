@@ -62,6 +62,16 @@ python scripts/run_sleuth_baseline.py \
   --llm mock
 ```
 
+The repository also includes a small MMLongBench-Doc PDF/question sample:
+
+```bash
+python scripts/run_sleuth_baseline.py \
+  --pdf samples/mmlongbench_doc/a4f3ced0696009fec3179f493e4f28c4.pdf \
+  --question "WHAT IS USCA CASE NUMBER?" \
+  --out-dir runs/mmlongbench_doc_mock \
+  --mode mock
+```
+
 ## SOL Mode
 
 SOL mode requires `sol_instructions.md`, Qwen3-VL dependencies, and ColPali:
