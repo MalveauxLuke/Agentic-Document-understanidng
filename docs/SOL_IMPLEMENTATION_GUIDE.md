@@ -244,6 +244,22 @@ export OUT_DIR=/scratch/$USER/agenticdocai/runs/sol_batch_test
 sbatch --export=ALL scripts/submit_sol.sbatch
 ```
 
+For the included MMLongBench-Doc sample, use the one-line wrapper:
+
+```bash
+sbatch slurm/sleuth_mmlongbench_doc_sol.sbatch
+```
+
+There is also a compatibility alias for users who want the old single-line
+shape from another project:
+
+```bash
+sbatch slurm/gdpo_debug_upstream.sbatch
+```
+
+That alias launches the same SLEUTH MMLongBench-Doc job; it is not a GDPO/VERL
+training job.
+
 Check job status:
 
 ```bash

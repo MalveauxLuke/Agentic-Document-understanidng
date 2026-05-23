@@ -84,6 +84,19 @@ python scripts/run_sleuth_baseline.py \
   --mode sol
 ```
 
+Or submit the included MMLongBench-Doc sample as a one-line Slurm job:
+
+```bash
+sbatch slurm/sleuth_mmlongbench_doc_sol.sbatch
+```
+
+For compatibility with a previous command shape, this alias launches the same
+SLEUTH job:
+
+```bash
+sbatch slurm/gdpo_debug_upstream.sbatch
+```
+
 ## Outputs
 
 A run writes rendered pages, agent artifacts, and final outputs:
