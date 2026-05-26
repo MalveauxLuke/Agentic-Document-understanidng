@@ -162,7 +162,36 @@ mkdir -p /scratch/$USER/huggingface
 mkdir -p /scratch/$USER/tmp
 ```
 
-Move or upload PDFs to:
+Install the official MMLongBench-Doc data layout with Slurm:
+
+```bash
+sbatch slurm/install_mmlongbench_doc.sbatch
+```
+
+This downloads:
+
+```text
+/scratch/$USER/agenticdocai/data/MMLongBench-Doc/data/samples.json
+/scratch/$USER/agenticdocai/data/MMLongBench-Doc/data/documents/*.pdf
+```
+
+For a quick downloader test without all PDFs:
+
+```bash
+LIMIT_EXAMPLES=2 sbatch slurm/install_mmlongbench_doc.sbatch
+```
+
+`LIMIT_EXAMPLES=2` downloads `samples.json` plus the PDFs needed by the first
+two benchmark rows, so it is suitable for a tiny eval smoke test. A full install
+uses no limit.
+
+If you already downloaded the dataset somewhere else, point eval jobs at it:
+
+```bash
+export DATA_DIR=/path/to/MMLongBench-Doc
+```
+
+For single-PDF experiments, move or upload PDFs to:
 
 ```text
 /scratch/$USER/agenticdocai/data/
@@ -231,7 +260,11 @@ fixes that solved the earlier Sol issues: direct environment Python, cleared
 `PYTHONPATH`/`PYTHONHOME`, `PYTHONNOUSERSITE=1`, env-local `LD_LIBRARY_PATH`,
 scratch HF caches, `public` partition/QoS, and HF-native ColPali.
 
-SLEUTH eval, defaulting to the included sample and `LIMIT=3`:
+SLEUTH eval, defaulting to:
+
+```text
+/scratch/$USER/agenticdocai/data/MMLongBench-Doc
+```
 
 ```bash
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
@@ -240,7 +273,6 @@ sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 Official MMLongBench-Doc SLEUTH debug run:
 
 ```bash
-DATA_DIR=/path/to/MMLongBench-Doc \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
@@ -248,7 +280,6 @@ sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 For a full run after the debug job works, use `LIMIT=ALL`:
 
 ```bash
-DATA_DIR=/path/to/MMLongBench-Doc \
 LIMIT=ALL \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
@@ -256,7 +287,6 @@ sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 Official MMLongBench-Doc base debug run:
 
 ```bash
-DATA_DIR=/path/to/MMLongBench-Doc \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_base_sol.sbatch
 ```
@@ -264,7 +294,6 @@ sbatch slurm/mmlongbench_eval_base_sol.sbatch
 Optional category filter:
 
 ```bash
-DATA_DIR=/path/to/MMLongBench-Doc \
 CATEGORY=Table \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
@@ -274,7 +303,6 @@ If your environment is under `~/.conda/envs` instead of `~/mamba-envs`:
 
 ```bash
 SLEUTH_ENV_NAME=$HOME/.conda/envs/sleuth-static \
-DATA_DIR=/path/to/MMLongBench-Doc \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```

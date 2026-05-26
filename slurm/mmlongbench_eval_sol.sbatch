@@ -51,7 +51,7 @@ mkdir -p "$HF_HOME" "$TRANSFORMERS_CACHE" "$HF_DATASETS_CACHE" "$TMPDIR"
 
 METHOD="${METHOD:-sleuth}"
 MODE="${MODE:-sol}"
-DATA_DIR="${DATA_DIR:-.}"
+DATA_DIR="${DATA_DIR:-${MMLONGBENCH_DOC_DIR:-/scratch/$USER/agenticdocai/data/MMLongBench-Doc}}"
 LIMIT="${LIMIT:-3}"
 CATEGORY="${CATEGORY:-}"
 TOP_K="${TOP_K:-5}"
@@ -79,7 +79,14 @@ esac
 
 if [[ ! -e "${DATA_DIR}" ]]; then
   echo "[mmlb-eval] ERROR: DATA_DIR does not exist: ${DATA_DIR}" >&2
-  echo "[mmlb-eval] Set DATA_DIR=/path/to/MMLongBench-Doc before sbatch." >&2
+  echo "[mmlb-eval] Install it first with: sbatch slurm/install_mmlongbench_doc.sbatch" >&2
+  echo "[mmlb-eval] Or set DATA_DIR=/path/to/MMLongBench-Doc before sbatch." >&2
+  exit 1
+fi
+
+if [[ ! -f "${DATA_DIR}/data/samples.json" && ! -f "${DATA_DIR}/samples/mmlongbench_doc/sample_question.json" ]]; then
+  echo "[mmlb-eval] ERROR: DATA_DIR does not look like MMLongBench-Doc: ${DATA_DIR}" >&2
+  echo "[mmlb-eval] Expected data/samples.json and data/documents/*.pdf." >&2
   exit 1
 fi
 
