@@ -126,7 +126,7 @@ or tiny debug metrics as benchmark results.
 On Sol, submit the same evaluation through Slurm with the hardened wrappers:
 
 ```bash
-sbatch slurm/install_mmlongbench_doc.sbatch
+bash scripts/install_mmlongbench_doc.sh
 LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
 ```
@@ -136,6 +136,13 @@ The wrappers default to `~/mamba-envs/sleuth-static/bin/python`, scratch caches,
 `vidore/colpali-v1.3-hf`. The dataset installer writes to
 `/scratch/$USER/agenticdocai/data/MMLongBench-Doc`, which is also the default
 `DATA_DIR` for the eval wrappers.
+
+After any eval run completes, the CLI prints a readable summary. You can print it
+again with:
+
+```bash
+python scripts/show_mmlongbench_results.py /scratch/$USER/agenticdocai/runs/<run_dir>
+```
 
 ## SOL Mode
 

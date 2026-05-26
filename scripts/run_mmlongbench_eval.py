@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 from sleuth.config import get_nested, load_config
 from sleuth.evaluation.dataset import load_mmlongbench_examples
 from sleuth.evaluation.harness import MMLongBenchEvaluator, load_sol_instructions_if_needed
+from sleuth.evaluation.reporting import print_results_summary
 from sleuth.llm.mock_client import MockClient
 from sleuth.llm.qwen_vl_client import QwenVLClient
 from sleuth.retrieval.colpali_retriever import ColPaliRetriever
@@ -37,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sol-instructions-md", default="sol_instructions.md")
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
+    parser.add_argument("--summary-examples", type=int, default=5)
     return parser.parse_args()
 
 
@@ -112,7 +114,8 @@ def main() -> None:
     )
     metrics = evaluator.run(examples, run_config)
     print(json.dumps(metrics, indent=2))
-    print(f"Output directory: {args.output_dir}")
+    print()
+    print_results_summary(args.output_dir, max_examples=args.summary_examples)
 
 
 if __name__ == "__main__":

@@ -162,10 +162,11 @@ mkdir -p /scratch/$USER/huggingface
 mkdir -p /scratch/$USER/tmp
 ```
 
-Install the official MMLongBench-Doc data layout with Slurm:
+Install the official MMLongBench-Doc data layout from your interactive VSCode
+shell:
 
 ```bash
-sbatch slurm/install_mmlongbench_doc.sbatch
+bash scripts/install_mmlongbench_doc.sh
 ```
 
 This downloads:
@@ -178,12 +179,18 @@ This downloads:
 For a quick downloader test without all PDFs:
 
 ```bash
-LIMIT_EXAMPLES=2 sbatch slurm/install_mmlongbench_doc.sbatch
+LIMIT_EXAMPLES=2 bash scripts/install_mmlongbench_doc.sh
 ```
 
 `LIMIT_EXAMPLES=2` downloads `samples.json` plus the PDFs needed by the first
 two benchmark rows, so it is suitable for a tiny eval smoke test. A full install
 uses no limit.
+
+To force a re-download:
+
+```bash
+FORCE=1 bash scripts/install_mmlongbench_doc.sh
+```
 
 If you already downloaded the dataset somewhere else, point eval jobs at it:
 
@@ -318,6 +325,13 @@ The evaluation artifacts default to:
 
 ```text
 /scratch/$USER/agenticdocai/runs/mmlongbench_eval_<method>_<JOB_ID>/
+```
+
+Each eval run prints a readable result summary when it finishes. To display a
+completed run again:
+
+```bash
+$PYTHON_BIN scripts/show_mmlongbench_results.py /scratch/$USER/agenticdocai/runs/mmlongbench_eval_sleuth_<JOB_ID>
 ```
 
 ## 7. Interactive SOL Run

@@ -79,7 +79,7 @@ esac
 
 if [[ ! -e "${DATA_DIR}" ]]; then
   echo "[mmlb-eval] ERROR: DATA_DIR does not exist: ${DATA_DIR}" >&2
-  echo "[mmlb-eval] Install it first with: sbatch slurm/install_mmlongbench_doc.sbatch" >&2
+  echo "[mmlb-eval] Install it from your VSCode shell with: bash scripts/install_mmlongbench_doc.sh" >&2
   echo "[mmlb-eval] Or set DATA_DIR=/path/to/MMLongBench-Doc before sbatch." >&2
   exit 1
 fi
@@ -152,8 +152,4 @@ printf '\n'
 "${cmd[@]}"
 
 echo "[mmlb-eval] done"
-echo "[mmlb-eval] metrics:"
-cat "${OUT_DIR}/metrics.json"
-echo
-echo "[mmlb-eval] first prediction:"
-head -n 1 "${OUT_DIR}/predictions.jsonl" || true
+"${PYTHON_BIN}" scripts/show_mmlongbench_results.py "${OUT_DIR}" --max-examples 5

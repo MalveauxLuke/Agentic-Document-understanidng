@@ -31,6 +31,8 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=True)
 
     assert "Output directory" in completed.stdout
+    assert "MMLongBench-Doc Results" in completed.stdout
+    assert "By Category" in completed.stdout
     for filename in [
         "predictions.jsonl",
         "metrics.json",

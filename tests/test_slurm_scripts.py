@@ -14,5 +14,6 @@ def test_slurm_scripts_parse_with_bash():
         ROOT / "slurm" / "sleuth_mmlongbench_doc_sol.sbatch",
         ROOT / "slurm" / "gdpo_debug_upstream.sbatch",
         ROOT / "scripts" / "submit_sol.sbatch",
+        ROOT / "scripts" / "install_mmlongbench_doc.sh",
     ]
     subprocess.run(["bash", "-n", *map(str, scripts)], cwd=ROOT, check=True)
