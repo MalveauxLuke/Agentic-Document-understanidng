@@ -250,6 +250,18 @@ For the included MMLongBench-Doc sample, use the one-line wrapper:
 sbatch slurm/sleuth_mmlongbench_doc_sol.sbatch
 ```
 
+The wrapper defaults to the environment at:
+
+```text
+~/mamba-envs/sleuth-static
+```
+
+If your environment lives somewhere else, override it at submit time:
+
+```bash
+SLEUTH_ENV_NAME=$HOME/.conda/envs/sleuth-static sbatch slurm/sleuth_mmlongbench_doc_sol.sbatch
+```
+
 There is also a compatibility alias for users who want the old single-line
 shape from another project:
 

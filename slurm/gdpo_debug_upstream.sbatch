@@ -22,4 +22,5 @@
 set -euo pipefail
 
 SBATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SLEUTH_ENV_NAME="${SLEUTH_ENV_NAME:-$HOME/mamba-envs/sleuth-static}"
 exec bash "${SBATCH_DIR}/sleuth_mmlongbench_doc_sol.sbatch" "$@"

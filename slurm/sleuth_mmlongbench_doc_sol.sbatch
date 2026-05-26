@@ -24,7 +24,16 @@ fi
 cd "${PROJECT_ROOT}"
 
 module load mamba/latest
-source activate "${SLEUTH_ENV_NAME:-sleuth-static}"
+SLEUTH_ENV_NAME="${SLEUTH_ENV_NAME:-$HOME/mamba-envs/sleuth-static}"
+PYTHON_BIN="${PYTHON_BIN:-${SLEUTH_ENV_NAME}/bin/python}"
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  echo "[sleuth-sol] ERROR: Python not found or not executable at ${PYTHON_BIN}" >&2
+  echo "[sleuth-sol] Set SLEUTH_ENV_NAME=/path/to/env or PYTHON_BIN=/path/to/python before sbatch." >&2
+  exit 1
+fi
+
+"${PYTHON_BIN}" -c "import pydantic; print('[sleuth-sol] pydantic import ok')"
 
 export HF_HOME="${HF_HOME:-/scratch/$USER/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
@@ -41,10 +50,10 @@ echo "[sleuth-sol] project root: ${PROJECT_ROOT}"
 echo "[sleuth-sol] pdf: ${PDF}"
 echo "[sleuth-sol] question: ${QUESTION}"
 echo "[sleuth-sol] out dir: ${OUT_DIR}"
-echo "[sleuth-sol] python: $(which python)"
-python -V
+echo "[sleuth-sol] python: ${PYTHON_BIN}"
+"${PYTHON_BIN}" -V
 
-python scripts/run_sleuth_baseline.py \
+"${PYTHON_BIN}" scripts/run_sleuth_baseline.py \
   --pdf "${PDF}" \
   --question "${QUESTION}" \
   --out-dir "${OUT_DIR}" \
