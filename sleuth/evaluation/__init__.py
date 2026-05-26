@@ -1,0 +1,1 @@
+"""MMLongBench-Doc evaluation helpers."""

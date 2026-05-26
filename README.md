@@ -72,6 +72,57 @@ python scripts/run_sleuth_baseline.py \
   --mode mock
 ```
 
+## MMLongBench-Doc Evaluation
+
+The repository includes a minimal MMLongBench-Doc evaluation harness for two
+methods:
+
+- `base`: ColPali top-5 retrieval, then Qwen3-VL answers directly from retrieved
+  pages
+- `sleuth`: ColPali top-5 retrieval, clue discovery, page screening, evidence
+  context, difficulty assessment, and core decision
+
+The harness targets the official repository layout:
+
+```text
+MMLongBench-Doc/
+  data/
+    samples.json
+    documents/
+      *.pdf
+```
+
+It writes `predictions.jsonl`, `metrics.json`, `metrics_by_category.csv`,
+`failed_examples.jsonl`, and `run_config.json`.
+
+Mock smoke test with the included sample:
+
+```bash
+python scripts/run_mmlongbench_eval.py \
+  --data_dir . \
+  --method sleuth \
+  --mode mock \
+  --limit 1 \
+  --output_dir runs/mmlongbench_eval_mock
+```
+
+Real SLEUTH evaluation on Sol or another GPU host:
+
+```bash
+python scripts/run_mmlongbench_eval.py \
+  --data_dir /path/to/MMLongBench-Doc \
+  --method sleuth \
+  --model Qwen/Qwen3-VL-8B-Instruct \
+  --retriever vidore/colpali-v1.3-hf \
+  --top_k 5 \
+  --temperature 0.1 \
+  --limit 3 \
+  --output_dir runs/mmlongbench_debug
+```
+
+Use `--method base` to run the direct retrieved-page baseline. Do not treat mock
+or tiny debug metrics as benchmark results.
+
 ## SOL Mode
 
 SOL mode requires `sol_instructions.md`, Qwen3-VL dependencies, and ColPali:

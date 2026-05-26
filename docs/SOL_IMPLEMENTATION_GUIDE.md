@@ -128,8 +128,8 @@ Check the heavy stack:
 python - <<'PY'
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
+from transformers import ColPaliForRetrieval, ColPaliProcessor
 import qwen_vl_utils
-from colpali_engine.models import ColPali, ColPaliProcessor
 print("torch:", torch.__version__)
 print("cuda available:", torch.cuda.is_available())
 print("heavy imports ok")
@@ -196,6 +196,27 @@ Expected final files:
 /scratch/$USER/agenticdocai/runs/mock_test/final/agent_prompts_used.md
 ```
 
+For the evaluation harness, smoke-test the included MMLongBench-Doc sample:
+
+```bash
+python scripts/run_mmlongbench_eval.py \
+  --data_dir . \
+  --method sleuth \
+  --mode mock \
+  --limit 1 \
+  --output_dir /scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock
+```
+
+This should create:
+
+```text
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/predictions.jsonl
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/metrics.json
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/metrics_by_category.csv
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/failed_examples.jsonl
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/run_config.json
+```
+
 ## 7. Interactive SOL Run
 
 Request a GPU allocation. For a first real test, use one GPU and a short
@@ -225,10 +246,35 @@ bash scripts/run_sol.sh \
 SOL mode enforces:
 
 - `Qwen/Qwen3-VL-8B-Instruct`
-- `vidore/colpali-v1.3`
+- `vidore/colpali-v1.3-hf` by default for the current HF-native ColPali path
 - top-5 retrieval
 - temperature `0.1`
 - mandatory `sol_instructions.md`
+
+To run a tiny real MMLongBench-Doc evaluation after cloning or staging the
+official dataset:
+
+```bash
+python scripts/run_mmlongbench_eval.py \
+  --data_dir /path/to/MMLongBench-Doc \
+  --method sleuth \
+  --mode sol \
+  --top_k 5 \
+  --temperature 0.1 \
+  --limit 3 \
+  --output_dir /scratch/$USER/agenticdocai/runs/mmlongbench_eval_sleuth_debug
+```
+
+Switch to the direct baseline with:
+
+```bash
+python scripts/run_mmlongbench_eval.py \
+  --data_dir /path/to/MMLongBench-Doc \
+  --method base \
+  --mode sol \
+  --limit 3 \
+  --output_dir /scratch/$USER/agenticdocai/runs/mmlongbench_eval_base_debug
+```
 
 ## 8. Batch SOL Run
 
