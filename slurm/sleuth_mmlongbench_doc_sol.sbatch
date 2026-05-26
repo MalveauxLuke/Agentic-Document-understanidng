@@ -43,8 +43,8 @@ import pydantic
 import torch
 import torchvision
 from transformers import AutoModelForImageTextToText, AutoProcessor
+from transformers import ColPaliForRetrieval, ColPaliProcessor
 import qwen_vl_utils
-from colpali_engine.models import ColPali, ColPaliProcessor
 
 print("[sleuth-sol] dependency preflight ok")
 print(f"[sleuth-sol] executable: {sys.executable}")

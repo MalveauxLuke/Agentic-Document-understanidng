@@ -11,7 +11,7 @@ model:
 
 retriever:
   type: colpali
-  name_or_path: vidore/colpali-v1.3
+  name_or_path: vidore/colpali-v1.3-hf
   top_k: 5
 
 pipeline:
