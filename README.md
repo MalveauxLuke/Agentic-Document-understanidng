@@ -123,6 +123,17 @@ python scripts/run_mmlongbench_eval.py \
 Use `--method base` to run the direct retrieved-page baseline. Do not treat mock
 or tiny debug metrics as benchmark results.
 
+On Sol, submit the same evaluation through Slurm with the hardened wrappers:
+
+```bash
+DATA_DIR=/path/to/MMLongBench-Doc LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+DATA_DIR=/path/to/MMLongBench-Doc LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
+```
+
+The wrappers default to `~/mamba-envs/sleuth-static/bin/python`, scratch caches,
+`public` partition/QoS, one A100 GPU, top-5 retrieval, temperature `0.1`, and
+`vidore/colpali-v1.3-hf`.
+
 ## SOL Mode
 
 SOL mode requires `sol_instructions.md`, Qwen3-VL dependencies, and ColPali:

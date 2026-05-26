@@ -14,11 +14,13 @@
 
 set -euo pipefail
 
-if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
-  PROJECT_ROOT="${PROJECT_ROOT:-${SLURM_SUBMIT_DIR}}"
+SBATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${PROJECT_ROOT:-}" ]]; then
+  PROJECT_ROOT="${PROJECT_ROOT}"
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "${SLURM_SUBMIT_DIR}/scripts/run_sleuth_baseline.py" ]]; then
+  PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 else
-  SBATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PROJECT_ROOT="${PROJECT_ROOT:-$(cd "${SBATCH_DIR}/.." && pwd)}"
+  PROJECT_ROOT="$(cd "${SBATCH_DIR}/.." && pwd)"
 fi
 
 cd "${PROJECT_ROOT}"

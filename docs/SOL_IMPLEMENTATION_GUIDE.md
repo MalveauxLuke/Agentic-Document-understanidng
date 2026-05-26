@@ -31,17 +31,23 @@ git commit -m "Add static SLEUTH baseline"
 git branch -M main
 ```
 
-Create an empty GitHub repository named `AgenticDocAI`, then connect and push:
+The current GitHub repository is:
+
+```text
+https://github.com/MalveauxLuke/Agentic-Document-understanidng.git
+```
+
+If you are creating a fresh fork instead, connect and push:
 
 ```bash
-git remote add origin git@github.com:<YOUR_GITHUB_USER>/AgenticDocAI.git
+git remote add origin git@github.com:<YOUR_GITHUB_USER>/Agentic-Document-understanidng.git
 git push -u origin main
 ```
 
 If using HTTPS instead of SSH:
 
 ```bash
-git remote add origin https://github.com/<YOUR_GITHUB_USER>/AgenticDocAI.git
+git remote add origin https://github.com/<YOUR_GITHUB_USER>/Agentic-Document-understanidng.git
 git push -u origin main
 ```
 
@@ -60,14 +66,14 @@ Keep code in home:
 
 ```bash
 cd ~
-git clone git@github.com:<YOUR_GITHUB_USER>/AgenticDocAI.git
-cd AgenticDocAI
+git clone https://github.com/MalveauxLuke/Agentic-Document-understanidng.git
+cd Agentic-Document-understanidng
 ```
 
 For future updates:
 
 ```bash
-cd ~/AgenticDocAI
+cd ~/Agentic-Document-understanidng
 git pull --ff-only
 ```
 
@@ -86,16 +92,19 @@ Load Mamba and create the environment:
 
 ```bash
 module load mamba/latest
-mamba env create -f environment.yml
-source activate sleuth-static
-python -V
-which python
+mkdir -p $HOME/mamba-envs
+mamba env create -p $HOME/mamba-envs/sleuth-static -f environment.yml
+
+export SLEUTH_ENV_NAME=$HOME/mamba-envs/sleuth-static
+export PYTHON_BIN=$SLEUTH_ENV_NAME/bin/python
+$PYTHON_BIN -V
+$PYTHON_BIN -c "import sys; print(sys.executable)"
 ```
 
-Install ColPali separately inside the active environment:
+Install ColPali into that environment:
 
 ```bash
-pip install colpali-engine
+$PYTHON_BIN -m pip install colpali-engine
 ```
 
 If ColPali installation fails, follow the current official ColPali installation
@@ -113,7 +122,7 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$CONDA_PREFIX/lib64${LD_LIBRARY_PATH:+
 Still inside the active environment:
 
 ```bash
-python - <<'PY'
+$PYTHON_BIN - <<'PY'
 import fitz
 import pydantic
 import yaml
@@ -125,7 +134,7 @@ PY
 Check the heavy stack:
 
 ```bash
-python - <<'PY'
+$PYTHON_BIN - <<'PY'
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from transformers import ColPaliForRetrieval, ColPaliProcessor
@@ -139,7 +148,7 @@ PY
 Run the unit tests from a compute allocation:
 
 ```bash
-pytest -q
+$PYTHON_BIN -m pytest -q
 ```
 
 ## 5. Place Data And Outputs On Scratch
@@ -176,7 +185,7 @@ the run.
 Mock mode does not need GPU, Qwen, or ColPali. Use it to confirm repo wiring:
 
 ```bash
-python scripts/run_sleuth_baseline.py \
+$PYTHON_BIN scripts/run_sleuth_baseline.py \
   --pdf /scratch/$USER/agenticdocai/data/example.pdf \
   --question "What is the main result?" \
   --out-dir /scratch/$USER/agenticdocai/runs/mock_test \
@@ -199,7 +208,7 @@ Expected final files:
 For the evaluation harness, smoke-test the included MMLongBench-Doc sample:
 
 ```bash
-python scripts/run_mmlongbench_eval.py \
+$PYTHON_BIN scripts/run_mmlongbench_eval.py \
   --data_dir . \
   --method sleuth \
   --mode mock \
@@ -217,6 +226,72 @@ This should create:
 /scratch/$USER/agenticdocai/runs/mmlongbench_eval_mock/run_config.json
 ```
 
+You can also submit the eval harness through Slurm. These wrappers use the same
+fixes that solved the earlier Sol issues: direct environment Python, cleared
+`PYTHONPATH`/`PYTHONHOME`, `PYTHONNOUSERSITE=1`, env-local `LD_LIBRARY_PATH`,
+scratch HF caches, `public` partition/QoS, and HF-native ColPali.
+
+SLEUTH eval, defaulting to the included sample and `LIMIT=3`:
+
+```bash
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+Official MMLongBench-Doc SLEUTH debug run:
+
+```bash
+DATA_DIR=/path/to/MMLongBench-Doc \
+LIMIT=3 \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+For a full run after the debug job works, use `LIMIT=ALL`:
+
+```bash
+DATA_DIR=/path/to/MMLongBench-Doc \
+LIMIT=ALL \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+Official MMLongBench-Doc base debug run:
+
+```bash
+DATA_DIR=/path/to/MMLongBench-Doc \
+LIMIT=3 \
+sbatch slurm/mmlongbench_eval_base_sol.sbatch
+```
+
+Optional category filter:
+
+```bash
+DATA_DIR=/path/to/MMLongBench-Doc \
+CATEGORY=Table \
+LIMIT=3 \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+If your environment is under `~/.conda/envs` instead of `~/mamba-envs`:
+
+```bash
+SLEUTH_ENV_NAME=$HOME/.conda/envs/sleuth-static \
+DATA_DIR=/path/to/MMLongBench-Doc \
+LIMIT=3 \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+The Slurm outputs are written next to your submission directory:
+
+```bash
+cat slurm-sleuth-mmlb-sleuth-<JOB_ID>.out
+cat slurm-sleuth-mmlb-sleuth-<JOB_ID>.err
+```
+
+The evaluation artifacts default to:
+
+```text
+/scratch/$USER/agenticdocai/runs/mmlongbench_eval_<method>_<JOB_ID>/
+```
+
 ## 7. Interactive SOL Run
 
 Request a GPU allocation. For a first real test, use one GPU and a short
@@ -229,18 +304,19 @@ salloc -p public -q public -t 04:00:00 -c 8 --mem=80G -G 1
 Then:
 
 ```bash
-module load mamba/latest
-source activate sleuth-static
+export SLEUTH_ENV_NAME=$HOME/mamba-envs/sleuth-static
+export PYTHON_BIN=$SLEUTH_ENV_NAME/bin/python
 
 export HF_HOME=/scratch/$USER/huggingface
 export TRANSFORMERS_CACHE=$HF_HOME/transformers
 export HF_DATASETS_CACHE=$HF_HOME/datasets
 export TMPDIR=/scratch/$USER/tmp
 
-bash scripts/run_sol.sh \
-  /scratch/$USER/agenticdocai/data/example.pdf \
-  "According to Table II, which datasets have exactly three methods?" \
-  /scratch/$USER/agenticdocai/runs/sol_test
+$PYTHON_BIN scripts/run_sleuth_baseline.py \
+  --pdf /scratch/$USER/agenticdocai/data/example.pdf \
+  --question "According to Table II, which datasets have exactly three methods?" \
+  --out-dir /scratch/$USER/agenticdocai/runs/sol_test \
+  --mode sol
 ```
 
 SOL mode enforces:
@@ -251,11 +327,11 @@ SOL mode enforces:
 - temperature `0.1`
 - mandatory `sol_instructions.md`
 
-To run a tiny real MMLongBench-Doc evaluation after cloning or staging the
-official dataset:
+To run a tiny real MMLongBench-Doc evaluation interactively after cloning or
+staging the official dataset:
 
 ```bash
-python scripts/run_mmlongbench_eval.py \
+$PYTHON_BIN scripts/run_mmlongbench_eval.py \
   --data_dir /path/to/MMLongBench-Doc \
   --method sleuth \
   --mode sol \
@@ -268,7 +344,7 @@ python scripts/run_mmlongbench_eval.py \
 Switch to the direct baseline with:
 
 ```bash
-python scripts/run_mmlongbench_eval.py \
+$PYTHON_BIN scripts/run_mmlongbench_eval.py \
   --data_dir /path/to/MMLongBench-Doc \
   --method base \
   --mode sol \
@@ -281,7 +357,7 @@ python scripts/run_mmlongbench_eval.py \
 Use the included Slurm template:
 
 ```bash
-cd ~/AgenticDocAI
+cd ~/Agentic-Document-understanidng
 
 export PDF=/scratch/$USER/agenticdocai/data/example.pdf
 export QUESTION="According to Table II, which datasets have exactly three methods?"
@@ -367,16 +443,17 @@ runs/sol_test/
 If `ModuleNotFoundError` appears:
 
 ```bash
-module load mamba/latest
-source activate sleuth-static
-which python
-python -V
+export SLEUTH_ENV_NAME=$HOME/mamba-envs/sleuth-static
+export PYTHON_BIN=$SLEUTH_ENV_NAME/bin/python
+$PYTHON_BIN -V
+$PYTHON_BIN -c "import sys; print(sys.executable)"
+$PYTHON_BIN -c "import pydantic; print('pydantic ok')"
 ```
 
 If Sol still runs old code:
 
 ```bash
-cd ~/AgenticDocAI
+cd ~/Agentic-Document-understanidng
 git status
 git pull --ff-only
 ```
