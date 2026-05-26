@@ -23,7 +23,6 @@ fi
 
 cd "${PROJECT_ROOT}"
 
-module load mamba/latest
 SLEUTH_ENV_NAME="${SLEUTH_ENV_NAME:-$HOME/mamba-envs/sleuth-static}"
 PYTHON_BIN="${PYTHON_BIN:-${SLEUTH_ENV_NAME}/bin/python}"
 
@@ -33,7 +32,26 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
   exit 1
 fi
 
-"${PYTHON_BIN}" -c "import pydantic; print('[sleuth-sol] pydantic import ok')"
+unset PYTHONPATH
+unset PYTHONHOME
+export PYTHONNOUSERSITE=1
+export LD_LIBRARY_PATH="${SLEUTH_ENV_NAME}/lib:${SLEUTH_ENV_NAME}/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+"${PYTHON_BIN}" - <<'PY'
+import sys
+import pydantic
+import torch
+import torchvision
+from transformers import AutoModelForImageTextToText, AutoProcessor
+import qwen_vl_utils
+from colpali_engine.models import ColPali, ColPaliProcessor
+
+print("[sleuth-sol] dependency preflight ok")
+print(f"[sleuth-sol] executable: {sys.executable}")
+print(f"[sleuth-sol] torch: {torch.__version__}")
+print(f"[sleuth-sol] torchvision: {torchvision.__version__}")
+print(f"[sleuth-sol] cuda available: {torch.cuda.is_available()}")
+PY
 
 export HF_HOME="${HF_HOME:-/scratch/$USER/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"

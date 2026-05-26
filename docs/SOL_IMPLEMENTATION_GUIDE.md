@@ -256,6 +256,10 @@ The wrapper defaults to the environment at:
 ~/mamba-envs/sleuth-static
 ```
 
+It calls that environment's `bin/python` directly instead of relying on
+`source activate`, and it clears `PYTHONPATH`/`PYTHONHOME` before running. This
+avoids Sol module Python leaking into the batch job.
+
 If your environment lives somewhere else, override it at submit time:
 
 ```bash
