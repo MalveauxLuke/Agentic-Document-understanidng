@@ -14,6 +14,21 @@
 
 set -euo pipefail
 
-SBATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${PROJECT_ROOT:-}" ]]; then
+  PROJECT_ROOT="${PROJECT_ROOT}"
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "${SLURM_SUBMIT_DIR}/slurm/mmlongbench_eval_sol.sbatch" ]]; then
+  PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
+else
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+
+if [[ ! -f "${PROJECT_ROOT}/slurm/mmlongbench_eval_sol.sbatch" ]]; then
+  echo "[mmlb-eval] ERROR: Could not find ${PROJECT_ROOT}/slurm/mmlongbench_eval_sol.sbatch" >&2
+  echo "[mmlb-eval] Submit from the repo root or set PROJECT_ROOT=/path/to/Agentic-Document-understanidng." >&2
+  exit 1
+fi
+
 export METHOD=sleuth
-exec bash "${SBATCH_DIR}/mmlongbench_eval_sol.sbatch" "$@"
+export PROJECT_ROOT
+exec bash "${PROJECT_ROOT}/slurm/mmlongbench_eval_sol.sbatch" "$@"

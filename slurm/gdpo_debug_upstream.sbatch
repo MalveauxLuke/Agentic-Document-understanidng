@@ -21,6 +21,21 @@
 
 set -euo pipefail
 
-SBATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${PROJECT_ROOT:-}" ]]; then
+  PROJECT_ROOT="${PROJECT_ROOT}"
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "${SLURM_SUBMIT_DIR}/slurm/sleuth_mmlongbench_doc_sol.sbatch" ]]; then
+  PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
+else
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+
+if [[ ! -f "${PROJECT_ROOT}/slurm/sleuth_mmlongbench_doc_sol.sbatch" ]]; then
+  echo "[sleuth-sol] ERROR: Could not find ${PROJECT_ROOT}/slurm/sleuth_mmlongbench_doc_sol.sbatch" >&2
+  echo "[sleuth-sol] Submit from the repo root or set PROJECT_ROOT=/path/to/Agentic-Document-understanidng." >&2
+  exit 1
+fi
+
 export SLEUTH_ENV_NAME="${SLEUTH_ENV_NAME:-$HOME/mamba-envs/sleuth-static}"
-exec bash "${SBATCH_DIR}/sleuth_mmlongbench_doc_sol.sbatch" "$@"
+export PROJECT_ROOT
+exec bash "${PROJECT_ROOT}/slurm/sleuth_mmlongbench_doc_sol.sbatch" "$@"
