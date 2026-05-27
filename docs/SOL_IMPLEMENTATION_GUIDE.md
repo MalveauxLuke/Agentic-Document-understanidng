@@ -265,18 +265,16 @@ This should create:
 You can also submit the eval harness through Slurm. These wrappers use the same
 fixes that solved the earlier Sol issues: direct environment Python, cleared
 `PYTHONPATH`/`PYTHONHOME`, `PYTHONNOUSERSITE=1`, env-local `LD_LIBRARY_PATH`,
-scratch HF caches, `public` partition/QoS, two A100 GPUs, and HF-native ColPali.
-The evaluator is still serial over examples, so two GPUs mainly help the
-Transformers `device_map="auto"` model placement rather than giving a guaranteed
-2x speedup.
+scratch HF caches, `public` partition/QoS, one A100 GPU, 24-hour walltime, and
+HF-native ColPali.
 
-Before submitting a long run, test the two-GPU request and model placement:
+Before submitting a long run, test the allocation and model loading:
 
 ```bash
 sbatch slurm/mmlongbench_eval_sleuth_debug_sol.sbatch
 ```
 
-This uses `htc` + `debug`, two A100s, 30 minutes, and `LIMIT=1` by default.
+This uses `htc` + `debug`, one A100, 30 minutes, and `LIMIT=1` by default.
 
 SLEUTH eval, defaulting to:
 
