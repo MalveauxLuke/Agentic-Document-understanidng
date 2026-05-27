@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=sleuth-mmlb-sleuth
+#SBATCH --job-name=sleuth-mmlb-debug
 #SBATCH --account=grp_vgupt140
-#SBATCH --partition=public
-#SBATCH --qos=public
+#SBATCH --partition=htc
+#SBATCH --qos=debug
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
 #SBATCH -G a100:2
-#SBATCH --time=24:00:00
+#SBATCH --time=00:30:00
 #SBATCH --output=slurm-%x-%j.out
 #SBATCH --error=slurm-%x-%j.err
 
@@ -30,5 +30,7 @@ if [[ ! -f "${PROJECT_ROOT}/slurm/mmlongbench_eval_sol.sbatch" ]]; then
 fi
 
 export METHOD=sleuth
+export LIMIT="${LIMIT:-1}"
+export OUT_DIR="${OUT_DIR:-/scratch/$USER/agenticdocai/runs/mmlongbench_eval_sleuth_debug_${SLURM_JOB_ID:-manual}}"
 export PROJECT_ROOT
 exec bash "${PROJECT_ROOT}/slurm/mmlongbench_eval_sol.sbatch" "$@"

@@ -7,8 +7,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
-#SBATCH -G a100:1
-#SBATCH --time=04:00:00
+#SBATCH -G a100:2
+#SBATCH --time=24:00:00
 #SBATCH --output=slurm-%x-%j.out
 #SBATCH --error=slurm-%x-%j.err
 
@@ -91,6 +91,7 @@ if [[ ! -f "${DATA_DIR}/data/samples.json" && ! -f "${DATA_DIR}/samples/mmlongbe
 fi
 
 "${PYTHON_BIN}" - <<PY
+import os
 import sys
 import fitz
 import pydantic
@@ -108,6 +109,8 @@ if "${MODE}" != "mock":
     print(f"[mmlb-eval] torch: {torch.__version__}")
     print(f"[mmlb-eval] torchvision: {torchvision.__version__}")
     print(f"[mmlb-eval] cuda available: {torch.cuda.is_available()}")
+    print(f"[mmlb-eval] cuda device count: {torch.cuda.device_count()}")
+    print(f"[mmlb-eval] CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES', '<unset>')}")
 PY
 
 echo "[mmlb-eval] project root: ${PROJECT_ROOT}"
