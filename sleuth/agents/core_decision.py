@@ -32,6 +32,17 @@ class CoreDecisionAgent:
             prompt_used=prompt_used,
         )
 
+    def _answer_from_text(self, raw_output: str | None, prompt_used: str) -> FinalAnswer:
+        answer = (raw_output or "").strip()
+        if not answer:
+            answer = "No answers found!"
+        return FinalAnswer(
+            answer=answer,
+            evidence_references=[],
+            raw_output=raw_output,
+            prompt_used=prompt_used,
+        )
+
     def _build_prompt(self, question: str, evidence_context: EvidenceContext, difficulty_output: DifficultyOutput) -> str:
         if evidence_context.retained_image_paths:
             page_lines = "\n".join(
@@ -77,10 +88,10 @@ class CoreDecisionAgent:
             )
             data = extract_json_from_text(raw_output)
             if data is None:
-                return self._fallback(raw_output, prompt)
+                return self._answer_from_text(raw_output, prompt)
 
             data.setdefault("answer", "No answers found!")
-            references = data.get("evidence_references") or []
+            references = data.get("evidence_references", data.get("evidence references")) or []
             data["evidence_references"] = references if isinstance(references, list) else []
             data["raw_output"] = raw_output
             data["prompt_used"] = prompt

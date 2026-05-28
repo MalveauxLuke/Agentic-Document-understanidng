@@ -7,6 +7,22 @@ from sleuth.schemas import DifficultyOutput, EvidenceContext
 from sleuth.utils.json_utils import extract_json_from_text
 
 
+def _normalize_difficulty_data(data: dict) -> dict:
+    difficulty_level = data.get("difficulty_level", data.get("difficulty level", 0))
+    try:
+        difficulty_level = int(difficulty_level)
+    except (TypeError, ValueError):
+        difficulty_level = 0
+    instruction_set = data.get(
+        "instruction_set",
+        data.get("instruction set", "Use ordinary direct extraction from the provided evidence."),
+    )
+    return {
+        "difficulty_level": difficulty_level,
+        "instruction_set": instruction_set,
+    }
+
+
 class DifficultyAssessmentAgent:
     def __init__(
         self,
@@ -48,6 +64,7 @@ class DifficultyAssessmentAgent:
             if data is None:
                 return self._fallback(raw_output, prompt)
 
+            data = _normalize_difficulty_data(data)
             if data.get("difficulty_level") not in (0, 1):
                 data["difficulty_level"] = 0
             data.setdefault("instruction_set", "Use ordinary direct extraction from the provided evidence.")

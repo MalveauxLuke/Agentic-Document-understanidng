@@ -7,11 +7,26 @@ from sleuth.instructions.instruction_loader import read_markdown_file
 
 
 SECTION_NAMES = {
-    "clue_discovery": ("CLUE DISCOVERY AGENT PROMPT",),
-    "page_screening": ("PAGE SCREENING AGENT PROMPT",),
-    "difficulty_assessment": ("DIFFICULTY ASSESSMENT AGENT PROMPT",),
-    "core_decision_text": ("CORE DECISION AGENT PROMPT", "TEXT EVIDENCE ONLY"),
-    "core_decision_visual": ("CORE DECISION AGENT PROMPT", "WITH VISUALS"),
+    "clue_discovery": (
+        ("CLUE DISCOVERY AGENT PROMPT",),
+        ("CLUE DISCOVERY AGENT",),
+    ),
+    "page_screening": (
+        ("PAGE SCREENING AGENT PROMPT",),
+        ("PAGE SCREENING AGENT",),
+    ),
+    "difficulty_assessment": (
+        ("DIFFICULTY ASSESSMENT AGENT PROMPT",),
+        ("DIFFICULTY ASSESSMENT AGENT",),
+    ),
+    "core_decision_text": (
+        ("CORE DECISION AGENT PROMPT", "TEXT EVIDENCE ONLY"),
+        ("CORE DECISION AGENT", "TEXT EVIDENCE ONLY"),
+    ),
+    "core_decision_visual": (
+        ("CORE DECISION AGENT PROMPT", "WITH VISUALS"),
+        ("CORE DECISION AGENT", "WITH VISUALS"),
+    ),
 }
 
 
@@ -19,9 +34,9 @@ def load_agent_prompt_markdown(path: str | Path) -> str:
     return read_markdown_file(path)
 
 
-def _line_matches(line: str, tokens: tuple[str, ...]) -> bool:
+def _line_matches(line: str, token_groups: tuple[tuple[str, ...], ...]) -> bool:
     upper = line.strip().upper()
-    return all(token in upper for token in tokens)
+    return any(all(token in upper for token in tokens) for tokens in token_groups)
 
 
 def _all_section_starts(lines: list[str]) -> list[tuple[int, str]]:

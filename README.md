@@ -93,7 +93,9 @@ MMLongBench-Doc/
 ```
 
 It writes `predictions.jsonl`, `metrics.json`, `metrics_by_category.csv`,
-`failed_examples.jsonl`, and `run_config.json`.
+`failed_examples.jsonl`, and `run_config.json`. Predictions include both
+`raw_model_answer` and `extracted_answer`; metrics score the extracted answer and
+also report raw-answer accuracy plus retrieval/clue/screening diagnostics.
 
 Mock smoke test with the included sample:
 
@@ -116,12 +118,16 @@ python scripts/run_mmlongbench_eval.py \
   --retriever vidore/colpali-v1.3-hf \
   --top_k 5 \
   --temperature 0.1 \
+  --answer-extractor auto \
   --limit 3 \
   --output_dir runs/mmlongbench_debug
 ```
 
 Use `--method base` to run the direct retrieved-page baseline. Do not treat mock
-or tiny debug metrics as benchmark results.
+or tiny debug metrics as benchmark results. `--answer-extractor auto` uses an
+OpenAI-compatible extractor when `ANSWER_EXTRACTOR_API_KEY`, `DEEPSEEK_API_KEY`,
+or `OPENAI_API_KEY` is set; otherwise it falls back to a heuristic extractor and
+marks scoring as not paper-comparable.
 
 On Sol, submit the same evaluation through Slurm with the hardened wrappers:
 
@@ -129,6 +135,12 @@ On Sol, submit the same evaluation through Slurm with the hardened wrappers:
 bash scripts/install_mmlongbench_doc.sh
 LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
+```
+
+To force a specific extraction mode through Slurm:
+
+```bash
+ANSWER_EXTRACTOR=heuristic LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
 
 The wrappers default to `~/mamba-envs/sleuth-static/bin/python`, scratch caches,

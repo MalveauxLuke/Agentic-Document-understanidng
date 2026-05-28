@@ -59,6 +59,7 @@ TEMPERATURE="${TEMPERATURE:-0.1}"
 MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
 RETRIEVER="${RETRIEVER:-vidore/colpali-v1.3-hf}"
 RENDER_DPI="${RENDER_DPI:-144}"
+ANSWER_EXTRACTOR="${ANSWER_EXTRACTOR:-auto}"
 OUT_DIR="${OUT_DIR:-/scratch/$USER/agenticdocai/runs/mmlongbench_eval_${METHOD}_${SLURM_JOB_ID:-manual}}"
 
 case "${METHOD}" in
@@ -123,6 +124,7 @@ echo "[mmlb-eval] top_k: ${TOP_K}"
 echo "[mmlb-eval] temperature: ${TEMPERATURE}"
 echo "[mmlb-eval] limit: ${LIMIT}"
 echo "[mmlb-eval] category: ${CATEGORY:-<none>}"
+echo "[mmlb-eval] answer extractor: ${ANSWER_EXTRACTOR}"
 echo "[mmlb-eval] out dir: ${OUT_DIR}"
 echo "[mmlb-eval] python: ${PYTHON_BIN}"
 "${PYTHON_BIN}" -V
@@ -138,6 +140,7 @@ cmd=(
   --temperature "${TEMPERATURE}"
   --output_dir "${OUT_DIR}"
   --render_dpi "${RENDER_DPI}"
+  --answer-extractor "${ANSWER_EXTRACTOR}"
 )
 
 if [[ -n "${LIMIT}" && "${LIMIT}" != "ALL" && "${LIMIT}" != "all" && "${LIMIT}" != "NONE" && "${LIMIT}" != "none" ]]; then

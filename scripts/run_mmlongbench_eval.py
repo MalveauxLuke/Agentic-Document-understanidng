@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from sleuth.config import get_nested, load_config
+from sleuth.evaluation.answer_extraction import build_answer_extractor
 from sleuth.evaluation.dataset import load_mmlongbench_examples
 from sleuth.evaluation.harness import MMLongBenchEvaluator, load_sol_instructions_if_needed
 from sleuth.evaluation.reporting import print_results_summary
@@ -38,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sol-instructions-md", default="sol_instructions.md")
     parser.add_argument("--device", default=None)
     parser.add_argument("--dtype", default=None)
+    parser.add_argument("--answer-extractor", choices=["auto", "none", "heuristic", "openai_compatible"], default="auto")
     parser.add_argument("--summary-examples", type=int, default=5)
     return parser.parse_args()
 
@@ -77,6 +79,7 @@ def main() -> None:
     llm_client = build_llm_client(args, config, max_new_tokens=int(max_tokens.get("core_decision", 512)))
     retriever, actual_retriever_name = build_retriever(args, config)
     sol_instruction_text = load_sol_instructions_if_needed(args.mode, args.sol_instructions_md)
+    answer_extractor = build_answer_extractor(args.answer_extractor, mode=args.mode)
 
     run_config = {
         "data_dir": args.data_dir,
@@ -92,6 +95,14 @@ def main() -> None:
         "output_dir": args.output_dir,
         "render_dpi": args.render_dpi,
         "num_examples": len(examples),
+        "answer_extractor_requested": args.answer_extractor,
+        "answer_extractor": answer_extractor.name,
+        "paper_comparable_scoring": answer_extractor.paper_comparable,
+        "difficulty_model_switching_enabled": False,
+        "difficulty_model_switching_note": (
+            "Difficulty Assessment generates an instruction set, but this prototype uses one Qwen-VL "
+            "client for both ordinary and reasoning modes."
+        ),
     }
 
     evaluator = MMLongBenchEvaluator(
@@ -111,6 +122,7 @@ def main() -> None:
             "difficulty_assessment": int(max_tokens.get("difficulty_assessment", 512)),
             "core_decision": int(max_tokens.get("core_decision", 512)),
         },
+        answer_extractor=answer_extractor,
     )
     metrics = evaluator.run(examples, run_config)
     print(json.dumps(metrics, indent=2))

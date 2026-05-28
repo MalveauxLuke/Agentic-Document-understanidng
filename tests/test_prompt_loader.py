@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from sleuth.agents.prompts import build_clue_discovery_prompt
 from sleuth.instructions.prompt_loader import get_prompt_section, load_agent_prompt_markdown
 
 
@@ -8,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_load_agent_prompts_markdown():
     text = load_agent_prompt_markdown(ROOT / "agent_prompts.md")
-    assert "CLUE DISCOVERY AGENT PROMPT" in text
+    assert "Clue Discovery Agent" in text
 
 
 def test_extract_required_sections_or_safe_fallback():
@@ -23,3 +24,20 @@ def test_extract_required_sections_or_safe_fallback():
         section = get_prompt_section(text, section_name)
         assert section.strip()
         assert "Fallback prompt section" in section or len(section) < len(text)
+
+
+def test_prompt_builder_does_not_add_removed_noise():
+    text = load_agent_prompt_markdown(ROOT / "agent_prompts.md")
+    section = get_prompt_section(text, "clue_discovery")
+    prompt = build_clue_discovery_prompt(
+        question="What changed?",
+        page_index=3,
+        page_text="This extracted text should not be appended.",
+        agent_prompt_text=section,
+        sol_instruction_text="This SOL text should not be prepended.",
+    )
+    assert "SOL-SPECIFIC INSTRUCTIONS" not in prompt
+    assert "This extracted text should not be appended." not in prompt
+    assert "Return valid JSON only. Do not wrap" not in prompt
+    assert "What changed?" in prompt
+    assert "Page Number: 3" in prompt

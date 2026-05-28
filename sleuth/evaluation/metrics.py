@@ -11,7 +11,16 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(predictions)
     score_sum = sum(float(item.get("score", 0.0)) for item in predictions)
     correct = sum(1 for item in predictions if float(item.get("score", 0.0)) > 0.0)
-    return {
+    raw_score_sum = sum(float(item.get("raw_score", 0.0)) for item in predictions)
+    raw_correct = sum(1 for item in predictions if float(item.get("raw_score", 0.0)) > 0.0)
+    gold_diagnostic_rows = [item for item in predictions if item.get("gold_hit_at_k") is not None]
+    gold_hits = sum(1 for item in gold_diagnostic_rows if item.get("gold_hit_at_k"))
+    clue_rows = [item for item in predictions if item.get("clue_hit_gold") is not None]
+    clue_hits = sum(1 for item in clue_rows if item.get("clue_hit_gold"))
+    screening_rows = [item for item in predictions if item.get("screening_retained_gold") is not None]
+    screening_hits = sum(1 for item in screening_rows if item.get("screening_retained_gold"))
+    changed = sum(1 for item in predictions if item.get("raw_model_answer") != item.get("extracted_answer"))
+    metrics = {
         "total": total,
         "average_score": score_sum / total if total else 0.0,
         "accuracy": score_sum / total if total else 0.0,
@@ -19,7 +28,22 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "count_correct": correct,
         "count_total": total,
         "correctness_accuracy": correct / total if total else 0.0,
+        "raw_average_score": raw_score_sum / total if total else 0.0,
+        "raw_correct": raw_correct,
+        "raw_correctness_accuracy": raw_correct / total if total else 0.0,
+        "answer_extraction_changed": changed,
+        "answer_extraction_changed_rate": changed / total if total else 0.0,
+        "gold_hit_at_k_count": gold_hits,
+        "gold_hit_at_k_total": len(gold_diagnostic_rows),
+        "gold_hit_at_k_rate": gold_hits / len(gold_diagnostic_rows) if gold_diagnostic_rows else 0.0,
+        "clue_hit_gold_count": clue_hits,
+        "clue_hit_gold_total": len(clue_rows),
+        "clue_hit_gold_rate": clue_hits / len(clue_rows) if clue_rows else 0.0,
+        "screening_retained_gold_count": screening_hits,
+        "screening_retained_gold_total": len(screening_rows),
+        "screening_retained_gold_rate": screening_hits / len(screening_rows) if screening_rows else 0.0,
     }
+    return metrics
 
 
 def compute_metrics_by_category(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -13,8 +13,19 @@ def build_evidence_summary(clue_outputs: list[ClueDiscoveryOutput]) -> str:
     lines: list[str] = []
     for clue_output in clue_outputs:
         if not clue_output.evidence_items:
+            if clue_output.page_summary.strip() or clue_output.key_insights.strip():
+                lines.append(f"Page index {clue_output.page_index}:")
+                if clue_output.page_summary.strip():
+                    lines.append(f"page_summary: {clue_output.page_summary.strip()}")
+                if clue_output.key_insights.strip():
+                    lines.append(f"key_insights: {clue_output.key_insights.strip()}")
+                lines.append("")
             continue
         lines.append(f"Page index {clue_output.page_index}:")
+        if clue_output.page_summary.strip():
+            lines.append(f"page_summary: {clue_output.page_summary.strip()}")
+        if clue_output.key_insights.strip():
+            lines.append(f"key_insights: {clue_output.key_insights.strip()}")
         for item in clue_output.evidence_items:
             content = item.content.strip()
             lines.append(f"- [{item.evidence_type}, {item.confidence}] {content}")

@@ -47,6 +47,12 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     prediction = json.loads(prediction_lines[0])
     assert prediction["document_id"].endswith(".pdf")
     assert prediction["retrieved_page_indices"] == [0]
+    assert prediction["raw_model_answer"]
+    assert prediction["extracted_answer"]
+    assert "raw_score" in prediction
+    assert "gold_hit_at_k" in prediction
+    assert "gold_missed_pages" in prediction
+    assert "failure_label" in prediction
     assert prediction["clue_output"]
     assert prediction["page_screening_output"]
     assert prediction["difficulty_output"]
@@ -56,3 +62,5 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert metrics["attempted"] == 1
     assert metrics["total"] == 1
     assert metrics["failed"] == 0
+    assert "raw_average_score" in metrics
+    assert "gold_hit_at_k_rate" in metrics

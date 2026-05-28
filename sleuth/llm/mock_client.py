@@ -38,21 +38,19 @@ class MockClient(LLMClient):
         prompt = _message_text(messages)
         page_index = _page_index_from_prompt(prompt)
 
-        if '"has_visual_element"' in prompt and '"keep_page"' in prompt:
-            return json.dumps(
-                {
-                    "has_visual_element": False,
-                    "relevance": "None",
-                    "reasoning": "Mock screening found no visual element.",
-                    "keep_page": False,
-                }
-            )
+        if "Has Chart:" in prompt and "Relevance:" in prompt and "Reasoning:" in prompt:
+            return "Has Chart: No\nRelevance: None\nReasoning: Mock screening found no visual element."
 
-        if '"difficulty_level"' in prompt and '"instruction_set"' in prompt:
+        if (
+            '"difficulty_level"' in prompt
+            and '"instruction_set"' in prompt
+            or '"difficulty level"' in prompt
+            and '"instruction set"' in prompt
+        ):
             return json.dumps(
                 {
-                    "difficulty_level": 0,
-                    "instruction_set": "Use ordinary direct extraction from the provided evidence.",
+                    "difficulty level": 0,
+                    "instruction set": "Use ordinary direct extraction from the provided evidence.",
                 }
             )
 
@@ -69,23 +67,31 @@ class MockClient(LLMClient):
                 }
             )
 
-        if '"has_relevant_evidence"' in prompt and '"evidence_items"' in prompt:
+        if (
+            '"has_relevant_evidence"' in prompt
+            and '"evidence_items"' in prompt
+            or '"has relevant evidence"' in prompt
+            and '"evidence items"' in prompt
+        ):
             return json.dumps(
                 {
-                    "page_number": page_index,
-                    "has_relevant_evidence": True,
-                    "evidence_items": [
+                    "page number": page_index,
+                    "has relevant evidence": True,
+                    "evidence items": [
                         {
-                            "evidence_type": "text",
+                            "evidence type": "text",
                             "content": "Mock evidence extracted from the page.",
                             "location": "mock page text",
                             "relevance": "Potentially relevant to the question.",
                             "confidence": "low",
                         }
                     ],
-                    "page_summary": "Mock page summary.",
-                    "key_insights": "Mock key insight.",
+                    "page summary": "Mock page summary.",
+                    "key insights": "Mock key insight.",
                 }
             )
+
+        if "YOUR ANSWER:" in prompt and "QUERY:" in prompt:
+            return "Mock answer based on extracted evidence."
 
         return json.dumps({"answer": "No answers found!", "evidence_references": []})

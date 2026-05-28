@@ -10,6 +10,7 @@ from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
 from sleuth.agents.page_screening import PageScreeningAgent
 from sleuth.documents.page_store import build_document_pages
+from sleuth.evaluation.answer_extraction import AnswerExtractor, HeuristicAnswerExtractor
 from sleuth.evaluation.dataset import MMLongBenchExample
 from sleuth.evaluation.metrics import compute_metrics, compute_metrics_by_category, save_metrics_by_category_csv
 from sleuth.evaluation.scoring import eval_score
@@ -112,31 +113,18 @@ def load_or_run_retrieval(
 
 
 def build_base_prompt(example: MMLongBenchExample, pages: list[DocumentPage], retrieved_pages: list[RetrievedPage]) -> str:
-    page_lookup = {page.page_index: page for page in pages}
-    page_blocks: list[str] = []
-    for retrieved in retrieved_pages:
-        page = page_lookup.get(retrieved.page_index)
-        page_text = (page.text or "").strip() if page else ""
-        if len(page_text) > 6000:
-            page_text = page_text[:6000] + "\n...[truncated]"
-        page_blocks.append(
-            f"Page index {retrieved.page_index} (retrieval score {retrieved.score:.4f}):\n"
-            f"{page_text or '[No extracted page text available.]'}"
-        )
-
+    page_lines = "\n".join(
+        f"- Page index {retrieved.page_index} (retrieval score {retrieved.score:.4f})"
+        for retrieved in retrieved_pages
+    )
     return (
         "You are an extractive document question answering model. Answer the question using only the "
-        "provided retrieved PDF page images and extracted page text.\n\n"
+        "provided retrieved PDF page images.\n\n"
         f"Question: {example.question}\n\n"
-        "Retrieved page text:\n"
-        f"{chr(10).join(page_blocks)}\n\n"
-        "Return strict JSON only, no markdown fences, with this format:\n"
-        "{\n"
-        '  "answer": "The shortest supported answer, or No answers found!",\n'
-        '  "evidence_references": [\n'
-        '    {"page_index": 0, "evidence": "Specific supporting evidence."}\n'
-        "  ]\n"
-        "}\n"
+        "Retrieved page images:\n"
+        f"{page_lines}\n\n"
+        "Give the shortest supported answer. If the answer is not visible in the provided pages, say "
+        "No answers found!"
     )
 
 
@@ -162,17 +150,24 @@ def run_base_example(
         max_new_tokens=max_new_tokens,
     )
     data = extract_json_from_text(raw_output) or {}
+    answer = str(data.get("answer", raw_output)).strip()
     return FinalAnswer(
-        answer=str(data.get("answer", "No answers found!")),
+        answer=answer or "No answers found!",
         evidence_references=data.get("evidence_references") if isinstance(data.get("evidence_references"), list) else [],
         raw_output=raw_output,
         prompt_used=prompt,
     )
 
 
-def _agent_cache_path(cache_dir: Path, example: MMLongBenchExample, agent_name: str, page_index: int | None = None) -> Path:
+def _agent_cache_path(
+    cache_dir: Path,
+    example: MMLongBenchExample,
+    agent_name: str,
+    page_index: int | None = None,
+    cache_fingerprint: str = "default",
+) -> Path:
     page_suffix = "" if page_index is None else f"_page_{page_index:04d}"
-    return cache_dir / "agents" / f"{_safe_id(example.question_id)}_{agent_name}{page_suffix}.json"
+    return cache_dir / "agents" / f"{_safe_id(example.question_id)}_{agent_name}{page_suffix}_{cache_fingerprint}.json"
 
 
 def _load_agent_output(path: Path, model_cls):
@@ -189,6 +184,7 @@ def run_sleuth_example(
     difficulty_agent: DifficultyAssessmentAgent,
     core_decision_agent: CoreDecisionAgent,
     cache_dir: Path,
+    cache_fingerprint: str,
 ) -> tuple[FinalAnswer, list[ClueDiscoveryOutput], list[PageScreeningOutput], DifficultyOutput]:
     page_lookup = {page.page_index: page for page in pages}
     clue_outputs: list[ClueDiscoveryOutput] = []
@@ -199,7 +195,7 @@ def run_sleuth_example(
         if page is None:
             continue
 
-        clue_cache = _agent_cache_path(cache_dir, example, "clue", page.page_index)
+        clue_cache = _agent_cache_path(cache_dir, example, "clue", page.page_index, cache_fingerprint)
         if clue_cache.exists():
             clue_output = _load_agent_output(clue_cache, ClueDiscoveryOutput)
         else:
@@ -207,7 +203,7 @@ def run_sleuth_example(
             save_json(clue_cache, clue_output)
         clue_outputs.append(clue_output)
 
-        screen_cache = _agent_cache_path(cache_dir, example, "screen", page.page_index)
+        screen_cache = _agent_cache_path(cache_dir, example, "screen", page.page_index, cache_fingerprint)
         if screen_cache.exists():
             screening_output = _load_agent_output(screen_cache, PageScreeningOutput)
         else:
@@ -223,7 +219,7 @@ def run_sleuth_example(
         page_screening_outputs=page_screening_outputs,
     )
 
-    difficulty_cache = _agent_cache_path(cache_dir, example, "difficulty")
+    difficulty_cache = _agent_cache_path(cache_dir, example, "difficulty", cache_fingerprint=cache_fingerprint)
     if difficulty_cache.exists():
         difficulty = _load_agent_output(difficulty_cache, DifficultyOutput)
     else:
@@ -232,6 +228,72 @@ def run_sleuth_example(
 
     final_answer = core_decision_agent.run(example.question, evidence_context, difficulty)
     return final_answer, clue_outputs, page_screening_outputs, difficulty
+
+
+def _retrieval_diagnostics(example: MMLongBenchExample, retrieved_pages: list[RetrievedPage]) -> dict[str, Any]:
+    gold_pages = sorted(set(example.evidence_pages))
+    retrieved_indices = [page.page_index for page in retrieved_pages]
+    retrieved_set = set(retrieved_indices)
+    if not gold_pages:
+        return {
+            "gold_evidence_pages": gold_pages,
+            "gold_hit_at_k": None,
+            "gold_missed_pages": [],
+        }
+    return {
+        "gold_evidence_pages": gold_pages,
+        "gold_hit_at_k": bool(set(gold_pages) & retrieved_set),
+        "gold_missed_pages": [page for page in gold_pages if page not in retrieved_set],
+    }
+
+
+def _stage_diagnostics(
+    method: str,
+    example: MMLongBenchExample,
+    retrieved_pages: list[RetrievedPage],
+    clue_outputs: list[ClueDiscoveryOutput],
+    page_screening_outputs: list[PageScreeningOutput],
+    score: float,
+    raw_score: float,
+) -> dict[str, Any]:
+    retrieval = _retrieval_diagnostics(example, retrieved_pages)
+    gold_pages = set(retrieval["gold_evidence_pages"])
+    clue_pages = sorted(
+        {
+            clue.page_index
+            for clue in clue_outputs
+            if clue.has_relevant_evidence or clue.evidence_items
+        }
+    )
+    retained_pages = sorted({screen.page_index for screen in page_screening_outputs if screen.keep_page})
+    visual_categories = {"Chart", "Table", "Figure", "Layout"}
+    has_visual_gold = bool(set(example.categories) & visual_categories)
+    clue_hit_gold = bool(gold_pages & set(clue_pages)) if gold_pages and method == "sleuth" else None
+    screening_retained_gold = (
+        bool(gold_pages & set(retained_pages)) if gold_pages and has_visual_gold and method == "sleuth" else None
+    )
+
+    if score > 0.0:
+        failure_label = "correct"
+    elif retrieval["gold_hit_at_k"] is False:
+        failure_label = "retrieval_miss"
+    elif method == "sleuth" and clue_hit_gold is False:
+        failure_label = "clue_miss"
+    elif method == "sleuth" and screening_retained_gold is False:
+        failure_label = "screening_drop"
+    elif raw_score > score:
+        failure_label = "scoring_or_extraction_mismatch"
+    else:
+        failure_label = "final_wrong"
+
+    return {
+        **retrieval,
+        "clue_pages_with_evidence": clue_pages,
+        "clue_hit_gold": clue_hit_gold,
+        "screening_retained_page_indices": retained_pages,
+        "screening_retained_gold": screening_retained_gold,
+        "failure_label": failure_label,
+    }
 
 
 class MMLongBenchEvaluator:
@@ -248,6 +310,7 @@ class MMLongBenchEvaluator:
         agent_prompts_md: str,
         sol_instruction_text: str | None,
         max_tokens: dict[str, int],
+        answer_extractor: AnswerExtractor | None = None,
     ) -> None:
         self.output_dir = ensure_dir(output_dir)
         self.cache_dir = ensure_dir(self.output_dir / "cache")
@@ -259,6 +322,7 @@ class MMLongBenchEvaluator:
         self.temperature = temperature
         self.render_dpi = render_dpi
         self.max_tokens = max_tokens
+        self.answer_extractor = answer_extractor or HeuristicAnswerExtractor()
 
         self.agent_prompt_markdown = load_agent_prompt_markdown(agent_prompts_md)
         save_instruction_copy(self.agent_prompt_markdown, self.output_dir / "agent_prompts_used.md")
@@ -293,6 +357,20 @@ class MMLongBenchEvaluator:
             sol_instruction_text=sol_instruction_text,
             temperature=temperature,
             max_new_tokens=max_tokens.get("core_decision", 512),
+        )
+        self.cache_fingerprint = _short_hash(
+            json.dumps(
+                {
+                    "method": method,
+                    "retriever": retriever_name,
+                    "top_k": top_k,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "llm": getattr(llm_client, "model_name_or_path", llm_client.__class__.__name__),
+                    "prompts": self.agent_prompt_markdown,
+                },
+                sort_keys=True,
+            )
         )
 
     def run_example(self, example: MMLongBenchExample) -> dict[str, Any]:
@@ -329,11 +407,23 @@ class MMLongBenchEvaluator:
                 self.difficulty_agent,
                 self.core_decision_agent,
                 self.cache_dir,
+                self.cache_fingerprint,
             )
         else:
             raise ValueError(f"Unsupported evaluation method: {self.method}")
 
-        score = eval_score(example.answer, final_answer.answer, example.answer_format)
+        extraction = self.answer_extractor.extract(example.question, final_answer.answer, example.answer_format)
+        raw_score = eval_score(example.answer, final_answer.answer, example.answer_format)
+        score = eval_score(example.answer, extraction.extracted_answer, example.answer_format)
+        diagnostics = _stage_diagnostics(
+            method=self.method,
+            example=example,
+            retrieved_pages=retrieved_pages,
+            clue_outputs=clue_outputs,
+            page_screening_outputs=page_screening_outputs,
+            score=score,
+            raw_score=raw_score,
+        )
         return {
             "question_id": example.question_id,
             "row_index": example.row_index,
@@ -342,12 +432,19 @@ class MMLongBenchEvaluator:
             "question": example.question,
             "ground_truth_answer": example.answer,
             "answer_format": example.answer_format,
-            "model_answer": final_answer.answer,
+            "model_answer": extraction.extracted_answer,
+            "raw_model_answer": final_answer.answer,
+            "extracted_answer": extraction.extracted_answer,
+            "answer_extractor": extraction.extractor,
+            "answer_extraction_error": extraction.error,
+            "paper_comparable_scoring": extraction.paper_comparable,
+            "raw_score": raw_score,
             "score": score,
             "correctness": score > 0.0,
             "category": example.categories[0] if example.categories else "None",
             "categories": example.categories,
             "evidence_pages": example.evidence_pages,
+            "gold_evidence_pages": diagnostics["gold_evidence_pages"],
             "evidence_sources": example.evidence_sources,
             "retrieved_page_indices": [page.page_index for page in retrieved_pages],
             "retrieved_pages": _model_dump(retrieved_pages),
@@ -357,8 +454,25 @@ class MMLongBenchEvaluator:
             "final_prompt": final_answer.prompt_used,
             "raw_response": final_answer.raw_output,
             "evidence_references": final_answer.evidence_references,
+            **diagnostics,
             "errors": None,
         }
+
+    def _write_metrics(self, predictions: list[dict[str, Any]], failed: list[dict[str, Any]], attempted: int) -> dict[str, Any]:
+        metrics = compute_metrics(predictions)
+        metrics["failed"] = len(failed)
+        metrics["attempted"] = attempted
+        metrics["answer_extractor"] = self.answer_extractor.name
+        metrics["paper_comparable_scoring"] = (
+            all(item.get("paper_comparable_scoring") for item in predictions)
+            if predictions
+            else self.answer_extractor.paper_comparable
+        )
+        metrics_by_category = compute_metrics_by_category(predictions)
+        save_json(self.output_dir / "metrics.json", metrics)
+        save_metrics_by_category_csv(self.output_dir / "metrics_by_category.csv", metrics_by_category)
+        write_text(self.output_dir / "summary.txt", json.dumps(metrics, indent=2))
+        return metrics
 
     def run(self, examples: list[MMLongBenchExample], run_config: dict[str, Any]) -> dict[str, Any]:
         predictions_path = self.output_dir / "predictions.jsonl"
@@ -374,6 +488,7 @@ class MMLongBenchEvaluator:
                     predictions.append(prediction)
                     pred_f.write(json.dumps(prediction) + "\n")
                     pred_f.flush()
+                    self._write_metrics(predictions, failed, attempted=len(examples))
                 except Exception as exc:
                     failed_example = {
                         **example.to_dict(),
@@ -382,15 +497,9 @@ class MMLongBenchEvaluator:
                     failed.append(failed_example)
                     fail_f.write(json.dumps(failed_example) + "\n")
                     fail_f.flush()
+                    self._write_metrics(predictions, failed, attempted=len(examples))
 
-        metrics = compute_metrics(predictions)
-        metrics["failed"] = len(failed)
-        metrics["attempted"] = len(examples)
-        metrics_by_category = compute_metrics_by_category(predictions)
-        save_json(self.output_dir / "metrics.json", metrics)
-        save_metrics_by_category_csv(self.output_dir / "metrics_by_category.csv", metrics_by_category)
-        write_text(self.output_dir / "summary.txt", json.dumps(metrics, indent=2))
-        return metrics
+        return self._write_metrics(predictions, failed, attempted=len(examples))
 
 
 def load_sol_instructions_if_needed(mode: str, path: str) -> str | None:
