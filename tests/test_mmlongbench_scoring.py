@@ -12,6 +12,9 @@ def test_eval_score_int_and_float():
 def test_eval_score_string_none_and_list():
     assert eval_score("21-13199", "21-13199", "Str") == 1.0
     assert eval_score("No answers found!", "No answers found!", "None") == 1.0
+    assert eval_score("Not answerable", "No answers found!", "None") == 1.0
+    assert eval_score("unanswerable", "insufficient information", "None") == 1.0
+    assert eval_score("Not answerable", "42", "None") == 0.0
     assert eval_score("['alpha', 'beta']", "['beta', 'alpha']", "List") == 1.0
     assert eval_score("['alpha', 'beta']", "['alpha']", "List") == 0.0
 

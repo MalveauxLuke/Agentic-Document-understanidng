@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import re
+
 from sleuth.agents._helpers import validate_model
 from sleuth.agents.prompts import build_clue_discovery_prompt
 from sleuth.llm.base import LLMClient
@@ -45,6 +48,96 @@ def _normalize_clue_data(data: dict, page_index: int) -> dict:
     return normalized
 
 
+def _decode_jsonish_string(value: str) -> str:
+    try:
+        return json.loads(f'"{value}"')
+    except json.JSONDecodeError:
+        return value.replace('\\"', '"').replace("\\n", "\n").strip()
+
+
+def _extract_string_field(text: str, *keys: str) -> str | None:
+    for key in keys:
+        pattern = rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"'
+        match = re.search(pattern, text, flags=re.DOTALL)
+        if match:
+            return _decode_jsonish_string(match.group(1)).strip()
+    return None
+
+
+def _extract_bool_field(text: str, *keys: str) -> bool | None:
+    for key in keys:
+        pattern = rf'"{re.escape(key)}"\s*:\s*(true|false)'
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).lower() == "true"
+    return None
+
+
+def _salvage_evidence_items(raw_output: str, page_index: int) -> list[dict]:
+    item_blocks = re.findall(
+        r'\{[^{}]*"content"\s*:\s*"(?:\\.|[^"\\])*"[^{}]*\}',
+        raw_output,
+        flags=re.DOTALL,
+    )
+    items: list[dict] = []
+    for block in item_blocks:
+        content = _extract_string_field(block, "content")
+        if not content:
+            continue
+        items.append(
+            {
+                "page_index": page_index,
+                "evidence_type": _extract_string_field(block, "evidence_type", "evidence type") or "raw",
+                "content": content,
+                "location": _extract_string_field(block, "location") or "Salvaged from unparsed clue output.",
+                "relevance": _extract_string_field(block, "relevance")
+                or "Recovered from invalid or truncated Clue Discovery JSON.",
+                "confidence": _extract_string_field(block, "confidence") or "low",
+            }
+        )
+
+    if items:
+        return items
+
+    for match in re.finditer(r'"content"\s*:\s*"((?:\\.|[^"\\])*)"', raw_output, flags=re.DOTALL):
+        content = _decode_jsonish_string(match.group(1)).strip()
+        if content:
+            items.append(
+                {
+                    "page_index": page_index,
+                    "evidence_type": "raw",
+                    "content": content,
+                    "location": "Salvaged from unparsed clue output.",
+                    "relevance": "Recovered from invalid or truncated Clue Discovery JSON.",
+                    "confidence": "low",
+                }
+            )
+    return items
+
+
+def _salvage_clue_data(raw_output: str | None, page_index: int) -> dict | None:
+    if not raw_output:
+        return None
+
+    items = _salvage_evidence_items(raw_output, page_index)
+    page_summary = _extract_string_field(raw_output, "page_summary", "page summary") or ""
+    key_insights = _extract_string_field(raw_output, "key_insights", "key insights") or ""
+    explicit_relevance = _extract_bool_field(raw_output, "has_relevant_evidence", "has relevant evidence")
+    if not items and not page_summary and not key_insights and explicit_relevance is None:
+        return None
+
+    if items and not page_summary:
+        page_summary = "Salvaged partial clue discovery output because the JSON was invalid or truncated."
+
+    return {
+        "page_index": page_index,
+        "has_relevant_evidence": bool(items) or bool(explicit_relevance),
+        "evidence_items": items,
+        "page_summary": page_summary,
+        "key_insights": key_insights,
+    }
+
+
 class ClueDiscoveryAgent:
     def __init__(
         self,
@@ -52,7 +145,7 @@ class ClueDiscoveryAgent:
         agent_prompt_text: str,
         sol_instruction_text: str | None = None,
         temperature: float = 0.1,
-        max_new_tokens: int | None = 1024,
+        max_new_tokens: int | None = 3072,
     ) -> None:
         self.llm_client = llm_client
         self.agent_prompt_text = agent_prompt_text
@@ -61,6 +154,11 @@ class ClueDiscoveryAgent:
         self.max_new_tokens = max_new_tokens
 
     def _fallback(self, page_index: int, raw_output: str | None, prompt_used: str) -> ClueDiscoveryOutput:
+        salvaged = _salvage_clue_data(raw_output, page_index)
+        if salvaged is not None:
+            salvaged["raw_output"] = raw_output
+            salvaged["prompt_used"] = prompt_used
+            return validate_model(ClueDiscoveryOutput, salvaged)
         return ClueDiscoveryOutput(
             page_index=page_index,
             has_relevant_evidence=False,

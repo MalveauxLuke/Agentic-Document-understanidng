@@ -36,6 +36,33 @@ def build_evidence_summary(clue_outputs: list[ClueDiscoveryOutput]) -> str:
     return summary or "No relevant evidence was extracted."
 
 
+def build_visual_screening_summary(page_screening_outputs: list[PageScreeningOutput]) -> str:
+    retained = [screening for screening in page_screening_outputs if screening.keep_page]
+    if not retained:
+        return ""
+
+    lines = ["Retained visual evidence:"]
+    for screening in retained:
+        lines.append(f"Page index {screening.page_index}:")
+        lines.append(f"screening_relevance: {screening.relevance}")
+        if screening.reasoning.strip():
+            lines.append(f"screening_reasoning: {screening.reasoning.strip()}")
+    return "\n".join(lines).strip()
+
+
+def build_multimodal_evidence_summary(
+    clue_outputs: list[ClueDiscoveryOutput],
+    page_screening_outputs: list[PageScreeningOutput],
+) -> str:
+    clue_summary = build_evidence_summary(clue_outputs)
+    visual_summary = build_visual_screening_summary(page_screening_outputs)
+    if not visual_summary:
+        return clue_summary
+    if clue_summary == "No relevant evidence was extracted.":
+        return visual_summary
+    return f"{clue_summary}\n\n{visual_summary}"
+
+
 def build_evidence_context(
     question: str,
     pages: list[DocumentPage],
@@ -52,7 +79,7 @@ def build_evidence_context(
         for index in retained_page_indices
         if index in page_lookup
     ]
-    evidence_summary = build_evidence_summary(clue_outputs)
+    evidence_summary = build_multimodal_evidence_summary(clue_outputs, page_screening_outputs)
     return EvidenceContext(
         question=question,
         retrieved_pages=retrieved_pages,

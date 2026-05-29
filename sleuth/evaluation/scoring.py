@@ -70,6 +70,24 @@ def get_clean_string(value: Any) -> str:
     return s
 
 
+def _is_no_answer(value: Any) -> bool:
+    s = str(value).lower().strip()
+    s = re.sub(r"\s*\([^)]*\)", "", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    s = re.sub(r"\s+", " ", s)
+    aliases = {
+        "no answer",
+        "no answers found",
+        "not answerable",
+        "unanswerable",
+        "insufficient data",
+        "insufficient information",
+        "answer not found",
+        "cannot be answered",
+    }
+    return s in aliases
+
+
 def is_exact_match(value: str) -> bool:
     s = str(value)
     if "https://" in s:
@@ -130,7 +148,16 @@ def eval_score(gt: Any, pred: Any, answer_type: str) -> float:
             pred_float = ""
             gt_float = gt
         score = is_float_equal(gt_float, pred_float, include_percentage=True, is_close=True)
-    elif answer_type in ["Str", "None"]:
+    elif answer_type == "None":
+        if _is_no_answer(gt) and _is_no_answer(pred):
+            score = True
+        elif _is_no_answer(gt) or _is_no_answer(pred):
+            score = False
+        else:
+            gt_clean = get_clean_string(gt)
+            pred_clean = get_clean_string(pred)
+            score = (gt_clean == pred_clean) if is_exact_match(gt_clean) else anls_compute(gt_clean, pred_clean)
+    elif answer_type == "Str":
         gt_clean = get_clean_string(gt)
         pred_clean = get_clean_string(pred)
         score = (gt_clean == pred_clean) if is_exact_match(gt_clean) else anls_compute(gt_clean, pred_clean)

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 from sleuth.config import get_nested, load_config
 from sleuth.evaluation.answer_extraction import build_answer_extractor
 from sleuth.evaluation.dataset import load_mmlongbench_examples
-from sleuth.evaluation.harness import MMLongBenchEvaluator, load_sol_instructions_if_needed
+from sleuth.evaluation.harness import PIPELINE_CACHE_VERSION, MMLongBenchEvaluator, load_sol_instructions_if_needed
 from sleuth.evaluation.reporting import print_results_summary
 from sleuth.llm.mock_client import MockClient
 from sleuth.llm.qwen_vl_client import QwenVLClient
@@ -97,6 +97,9 @@ def main() -> None:
         "num_examples": len(examples),
         "answer_extractor_requested": args.answer_extractor,
         "answer_extractor": answer_extractor.name,
+        "answer_extractor_model": getattr(answer_extractor, "model", None),
+        "answer_extractor_base_url": getattr(answer_extractor, "base_url", None),
+        "pipeline_cache_version": PIPELINE_CACHE_VERSION,
         "paper_comparable_scoring": answer_extractor.paper_comparable,
         "difficulty_model_switching_enabled": False,
         "difficulty_model_switching_note": (
@@ -117,7 +120,7 @@ def main() -> None:
         agent_prompts_md=args.agent_prompts_md,
         sol_instruction_text=sol_instruction_text,
         max_tokens={
-            "clue_discovery": int(max_tokens.get("clue_discovery", 1024)),
+            "clue_discovery": int(max_tokens.get("clue_discovery", 3072)),
             "page_screening": int(max_tokens.get("page_screening", 512)),
             "difficulty_assessment": int(max_tokens.get("difficulty_assessment", 512)),
             "core_decision": int(max_tokens.get("core_decision", 512)),

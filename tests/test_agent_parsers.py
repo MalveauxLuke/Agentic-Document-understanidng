@@ -1,4 +1,4 @@
-from sleuth.agents.clue_discovery import _normalize_clue_data
+from sleuth.agents.clue_discovery import _normalize_clue_data, _salvage_clue_data
 from sleuth.agents.difficulty_assessment import _normalize_difficulty_data
 from sleuth.agents.page_screening import _parse_screening_text
 
@@ -26,6 +26,30 @@ def test_clue_parser_accepts_paper_style_keys():
     assert data["evidence_items"][0]["evidence_type"] == "chart"
     assert data["page_summary"] == "summary"
     assert data["key_insights"] == "insight"
+
+
+def test_clue_parser_salvages_truncated_json_items():
+    raw_output = """
+{
+  "page number": 10,
+  "has relevant evidence": true,
+  "evidence items": [
+    {
+      "evidence type": "chart/table",
+      "content": "White adults: 59% in 2014 and 49% in 2015.",
+      "location": "Bar chart row for White adults",
+      "relevance": "Shows a 10 percentage point drop.",
+      "confidence": "high"
+    }
+  ],
+  "page summary": "The page summary starts but is cut off
+"""
+    data = _salvage_clue_data(raw_output, page_index=10)
+    assert data is not None
+    assert data["has_relevant_evidence"] is True
+    assert data["evidence_items"][0]["evidence_type"] == "chart/table"
+    assert "59% in 2014" in data["evidence_items"][0]["content"]
+    assert data["evidence_items"][0]["confidence"] == "high"
 
 
 def test_page_screening_parser_accepts_original_format():

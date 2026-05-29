@@ -64,3 +64,11 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert metrics["failed"] == 0
     assert "raw_average_score" in metrics
     assert "gold_hit_at_k_rate" in metrics
+    assert "answer_extractor_model" in metrics
+    assert "answer_extractor_base_url" in metrics
+    assert metrics["pipeline_cache_version"]
+
+    run_config = json.loads((output_dir / "run_config.json").read_text(encoding="utf-8"))
+    assert "answer_extractor_model" in run_config
+    assert "answer_extractor_base_url" in run_config
+    assert run_config["pipeline_cache_version"] == metrics["pipeline_cache_version"]

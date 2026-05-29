@@ -110,7 +110,7 @@ def main() -> None:
     llm_client = build_llm(
         llm_name,
         config,
-        max_new_tokens=int(max_tokens.get("clue_discovery", 1024)),
+        max_new_tokens=int(max_tokens.get("clue_discovery", 3072)),
     )
     retriever = build_retriever(retriever_name, config)
 
@@ -119,7 +119,7 @@ def main() -> None:
         agent_prompt_text=get_prompt_section(agent_prompt_markdown, "clue_discovery"),
         sol_instruction_text=sol_instruction_text,
         temperature=args.temperature,
-        max_new_tokens=int(max_tokens.get("clue_discovery", 1024)),
+        max_new_tokens=int(max_tokens.get("clue_discovery", 3072)),
     )
     page_screening_agent = PageScreeningAgent(
         llm_client=llm_client,

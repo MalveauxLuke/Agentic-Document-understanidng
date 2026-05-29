@@ -4,7 +4,7 @@ model:
   device: cuda
   dtype: bfloat16
   max_new_tokens:
-    clue_discovery: 1024
+    clue_discovery: 3072
     page_screening: 512
     difficulty_assessment: 512
     core_decision: 512

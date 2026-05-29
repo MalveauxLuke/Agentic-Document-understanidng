@@ -31,6 +31,9 @@ from sleuth.utils.file_utils import ensure_dir, write_text
 from sleuth.utils.json_utils import extract_json_from_text, load_json, save_json
 
 
+PIPELINE_CACHE_VERSION = "paper-faithful-recovery-v1"
+
+
 def _model_dump(obj: Any) -> Any:
     if hasattr(obj, "model_dump"):
         return obj.model_dump()
@@ -323,6 +326,7 @@ class MMLongBenchEvaluator:
         self.render_dpi = render_dpi
         self.max_tokens = max_tokens
         self.answer_extractor = answer_extractor or HeuristicAnswerExtractor()
+        self.pipeline_cache_version = PIPELINE_CACHE_VERSION
 
         self.agent_prompt_markdown = load_agent_prompt_markdown(agent_prompts_md)
         save_instruction_copy(self.agent_prompt_markdown, self.output_dir / "agent_prompts_used.md")
@@ -334,7 +338,7 @@ class MMLongBenchEvaluator:
             get_prompt_section(self.agent_prompt_markdown, "clue_discovery"),
             sol_instruction_text=sol_instruction_text,
             temperature=temperature,
-            max_new_tokens=max_tokens.get("clue_discovery", 1024),
+            max_new_tokens=max_tokens.get("clue_discovery", 3072),
         )
         self.page_screening_agent = PageScreeningAgent(
             llm_client,
@@ -366,6 +370,7 @@ class MMLongBenchEvaluator:
                     "top_k": top_k,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "pipeline_cache_version": self.pipeline_cache_version,
                     "llm": getattr(llm_client, "model_name_or_path", llm_client.__class__.__name__),
                     "prompts": self.agent_prompt_markdown,
                 },
@@ -463,6 +468,9 @@ class MMLongBenchEvaluator:
         metrics["failed"] = len(failed)
         metrics["attempted"] = attempted
         metrics["answer_extractor"] = self.answer_extractor.name
+        metrics["answer_extractor_model"] = getattr(self.answer_extractor, "model", None)
+        metrics["answer_extractor_base_url"] = getattr(self.answer_extractor, "base_url", None)
+        metrics["pipeline_cache_version"] = self.pipeline_cache_version
         metrics["paper_comparable_scoring"] = (
             all(item.get("paper_comparable_scoring") for item in predictions)
             if predictions
