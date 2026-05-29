@@ -16,6 +16,12 @@ def test_eval_score_string_none_and_list():
     assert eval_score("unanswerable", "insufficient information", "None") == 1.0
     assert eval_score("Not answerable", "42", "None") == 0.0
     assert eval_score("['alpha', 'beta']", "['beta', 'alpha']", "List") == 1.0
+    assert eval_score("['White', '10%']", "White, 10 percentage points", "List") == 1.0
+    assert eval_score(
+        "['OPTIMISATION', 'PREDICTIVE MODELING', 'FORECASTING', 'STATISTICAL ANALYSIS']",
+        "Statistical Analysis, Forecasting, Predictive Modelling, Optimisation",
+        "List",
+    ) > 0.9
     assert eval_score("['alpha', 'beta']", "['alpha']", "List") == 0.0
 
 

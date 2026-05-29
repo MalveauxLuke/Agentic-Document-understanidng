@@ -118,9 +118,9 @@ def isfloat(value: str) -> bool:
 
 
 def _maybe_parse_list(value: Any) -> list[Any]:
-    if isinstance(value, str) and value.startswith("["):
+    if isinstance(value, str) and value.strip().startswith("["):
         try:
-            parsed = ast.literal_eval(value)
+            parsed = ast.literal_eval(value.strip())
         except (SyntaxError, ValueError):
             parsed = value
         if isinstance(parsed, list):
@@ -129,6 +129,37 @@ def _maybe_parse_list(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _split_list_phrase(value: Any, expected_len: int | None = None) -> list[Any]:
+    parsed = _maybe_parse_list(value)
+    if len(parsed) != 1 or not isinstance(parsed[0], str):
+        return parsed
+    text = parsed[0].strip()
+    if not text:
+        return [text]
+
+    parts: list[str] = []
+    if "\n" in text:
+        parts = [re.sub(r"^[-*•]\s*", "", line).strip() for line in text.splitlines()]
+    elif "," in text or ";" in text:
+        parts = re.split(r"\s*(?:,|;)\s*", text)
+    elif expected_len and expected_len > 1 and " and " in text.lower():
+        parts = re.split(r"\s+and\s+", text, flags=re.IGNORECASE)
+
+    parts = [part.strip() for part in parts if part.strip()]
+    if len(parts) > 1:
+        return parts
+    return parsed
+
+
+def _clean_list_item(value: Any) -> str:
+    item = get_clean_string(value)
+    item = re.sub(r"\bpercentage\s+points?\b", "", item)
+    item = re.sub(r"\bpercent\b", "", item)
+    item = re.sub(r"\bpoints?\b", "", item)
+    item = re.sub(r"\s+", " ", item).strip()
+    return item
 
 
 def eval_score(gt: Any, pred: Any, answer_type: str) -> float:
@@ -162,13 +193,13 @@ def eval_score(gt: Any, pred: Any, answer_type: str) -> float:
         pred_clean = get_clean_string(pred)
         score = (gt_clean == pred_clean) if is_exact_match(gt_clean) else anls_compute(gt_clean, pred_clean)
     else:
-        gt_list = _maybe_parse_list(gt)
-        pred_list = _maybe_parse_list(pred)
+        gt_list = _split_list_phrase(gt)
+        pred_list = _split_list_phrase(pred, expected_len=len(gt_list))
         if len(gt_list) != len(pred_list):
             score = 0.0
         else:
-            gt_clean_list = sorted([get_clean_string(item) for item in gt_list])
-            pred_clean_list = sorted([get_clean_string(item) for item in pred_list])
+            gt_clean_list = sorted([_clean_list_item(item) for item in gt_list])
+            pred_clean_list = sorted([_clean_list_item(item) for item in pred_list])
             if not gt_clean_list:
                 score = 0.0
             elif isfloat(gt_clean_list[0]) or is_exact_match(gt_clean_list[0]):

@@ -15,8 +15,16 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     raw_correct = sum(1 for item in predictions if float(item.get("raw_score", 0.0)) > 0.0)
     gold_diagnostic_rows = [item for item in predictions if item.get("gold_hit_at_k") is not None]
     gold_hits = sum(1 for item in gold_diagnostic_rows if item.get("gold_hit_at_k"))
+    gold_all_hits = sum(1 for item in gold_diagnostic_rows if item.get("gold_all_hit_at_k"))
+    gold_recall_values = [
+        float(item.get("gold_page_recall_at_k", 0.0))
+        for item in gold_diagnostic_rows
+        if item.get("gold_page_recall_at_k") is not None
+    ]
     clue_rows = [item for item in predictions if item.get("clue_hit_gold") is not None]
     clue_hits = sum(1 for item in clue_rows if item.get("clue_hit_gold"))
+    clue_any_rows = [item for item in predictions if item.get("clue_has_any_evidence") is not None]
+    clue_any_hits = sum(1 for item in clue_any_rows if item.get("clue_has_any_evidence"))
     screening_rows = [item for item in predictions if item.get("screening_retained_gold") is not None]
     screening_hits = sum(1 for item in screening_rows if item.get("screening_retained_gold"))
     changed = sum(1 for item in predictions if item.get("raw_model_answer") != item.get("extracted_answer"))
@@ -36,9 +44,18 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "gold_hit_at_k_count": gold_hits,
         "gold_hit_at_k_total": len(gold_diagnostic_rows),
         "gold_hit_at_k_rate": gold_hits / len(gold_diagnostic_rows) if gold_diagnostic_rows else 0.0,
+        "gold_all_hit_at_k_count": gold_all_hits,
+        "gold_all_hit_at_k_total": len(gold_diagnostic_rows),
+        "gold_all_hit_at_k_rate": gold_all_hits / len(gold_diagnostic_rows) if gold_diagnostic_rows else 0.0,
+        "gold_page_recall_at_k_average": (
+            sum(gold_recall_values) / len(gold_recall_values) if gold_recall_values else 0.0
+        ),
         "clue_hit_gold_count": clue_hits,
         "clue_hit_gold_total": len(clue_rows),
         "clue_hit_gold_rate": clue_hits / len(clue_rows) if clue_rows else 0.0,
+        "clue_has_any_evidence_count": clue_any_hits,
+        "clue_has_any_evidence_total": len(clue_any_rows),
+        "clue_has_any_evidence_rate": clue_any_hits / len(clue_any_rows) if clue_any_rows else 0.0,
         "screening_retained_gold_count": screening_hits,
         "screening_retained_gold_total": len(screening_rows),
         "screening_retained_gold_rate": screening_hits / len(screening_rows) if screening_rows else 0.0,

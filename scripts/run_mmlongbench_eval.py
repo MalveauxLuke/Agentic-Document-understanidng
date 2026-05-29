@@ -72,6 +72,7 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     max_tokens = get_nested(config, ["model", "max_new_tokens"], {})
+    region_refinement = str(get_nested(config, ["pipeline", "region_refinement"], "fallback"))
     examples = load_mmlongbench_examples(args.data_dir, limit=args.limit, category=args.category)
     if not examples:
         raise ValueError("No MMLongBench-Doc examples matched the requested filters.")
@@ -100,6 +101,7 @@ def main() -> None:
         "answer_extractor_model": getattr(answer_extractor, "model", None),
         "answer_extractor_base_url": getattr(answer_extractor, "base_url", None),
         "pipeline_cache_version": PIPELINE_CACHE_VERSION,
+        "region_refinement": region_refinement,
         "paper_comparable_scoring": answer_extractor.paper_comparable,
         "difficulty_model_switching_enabled": False,
         "difficulty_model_switching_note": (
@@ -126,6 +128,7 @@ def main() -> None:
             "core_decision": int(max_tokens.get("core_decision", 512)),
         },
         answer_extractor=answer_extractor,
+        region_refinement=region_refinement,
     )
     metrics = evaluator.run(examples, run_config)
     print(json.dumps(metrics, indent=2))

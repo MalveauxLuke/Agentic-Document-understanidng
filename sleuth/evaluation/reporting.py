@@ -80,6 +80,9 @@ def build_results_summary(output_dir: str | Path, max_examples: int = 5) -> str:
                 f"  raw_average_score: {_format_float(metrics.get('raw_average_score', 0.0))}",
                 f"  raw_correctness_accuracy: {_format_float(metrics.get('raw_correctness_accuracy', 0.0))}",
                 f"  retrieval_hit_at_k: {metrics.get('gold_hit_at_k_count', 0)}/{metrics.get('gold_hit_at_k_total', 0)} ({_format_float(metrics.get('gold_hit_at_k_rate', 0.0))})",
+                f"  retrieval_all_hit_at_k: {metrics.get('gold_all_hit_at_k_count', 0)}/{metrics.get('gold_all_hit_at_k_total', 0)} ({_format_float(metrics.get('gold_all_hit_at_k_rate', 0.0))})",
+                f"  retrieval_page_recall_at_k: {_format_float(metrics.get('gold_page_recall_at_k_average', 0.0))}",
+                f"  clue_has_any_evidence: {metrics.get('clue_has_any_evidence_count', 0)}/{metrics.get('clue_has_any_evidence_total', 0)} ({_format_float(metrics.get('clue_has_any_evidence_rate', 0.0))})",
                 f"  clue_hit_gold: {metrics.get('clue_hit_gold_count', 0)}/{metrics.get('clue_hit_gold_total', 0)} ({_format_float(metrics.get('clue_hit_gold_rate', 0.0))})",
                 f"  screening_retained_gold: {metrics.get('screening_retained_gold_count', 0)}/{metrics.get('screening_retained_gold_total', 0)} ({_format_float(metrics.get('screening_retained_gold_rate', 0.0))})",
                 f"  answer_extractor: {metrics.get('answer_extractor', 'unknown')}",
@@ -110,8 +113,8 @@ def build_results_summary(output_dir: str | Path, max_examples: int = 5) -> str:
                     f"    ground_truth: {item.get('ground_truth_answer')}",
                     f"    model_answer: {item.get('model_answer')}",
                     f"    raw_model_answer: {item.get('raw_model_answer')}",
-                    f"    retrieved_pages: {item.get('retrieved_page_indices')}",
-                    f"    gold_pages: {item.get('gold_evidence_pages')}",
+                    f"    retrieved_pages: {item.get('retrieved_page_indices')} display={item.get('retrieved_display_page_numbers')}",
+                    f"    gold_pages: {item.get('gold_evidence_pages')} display={item.get('gold_display_page_numbers')}",
                     f"    failure_label: {item.get('failure_label')}",
                 ]
             )

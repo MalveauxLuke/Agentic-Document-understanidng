@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -46,13 +47,53 @@ def _clean_candidate(text: str) -> str:
     return candidate.strip().strip("\"'")
 
 
+def _split_list_candidate(text: str) -> list[str]:
+    candidate = _clean_candidate(text)
+    if not candidate:
+        return []
+    if candidate.startswith("["):
+        try:
+            parsed = ast.literal_eval(candidate)
+        except (SyntaxError, ValueError):
+            parsed = None
+        if isinstance(parsed, list):
+            return [_clean_candidate(str(item)) for item in parsed if _clean_candidate(str(item))]
+    if "\n" in candidate:
+        lines = [re.sub(r"^[-*•]\s*", "", line).strip() for line in candidate.splitlines()]
+        lines = [line for line in lines if line]
+        if len(lines) > 1:
+            return [_clean_candidate(line) for line in lines]
+    pieces = re.split(r"\s*(?:,|;)\s*", candidate)
+    pieces = [_clean_candidate(piece) for piece in pieces if _clean_candidate(piece)]
+    return pieces if len(pieces) > 1 else [candidate]
+
+
+def _format_extracted_answer(text: str, answer_format: str | None) -> str:
+    candidate = _clean_candidate(text)
+    if candidate.lower().strip("!. ") in {"no answers found", "not answerable", "unanswerable"}:
+        return candidate
+    if (answer_format or "").lower() == "list":
+        items = _split_list_candidate(candidate)
+        return str(items) if items else candidate
+    return candidate
+
+
+def _format_instruction(answer_format: str | None) -> str:
+    if (answer_format or "").lower() == "list":
+        return (
+            'Because the answer format is List, return a Python-style list of atomic answer items, '
+            'for example: ["White", "10%"]. Do not return a comma sentence.'
+        )
+    return "Return only the shortest answer string."
+
+
 class NoneAnswerExtractor(AnswerExtractor):
     name = "none"
     paper_comparable = False
 
     def extract(self, question: str, raw_answer: str, answer_format: str | None = None) -> AnswerExtractionResult:
         extracted = _answer_from_json(raw_answer) or _clean_candidate(raw_answer)
-        return AnswerExtractionResult(raw_answer, extracted, self.name, self.paper_comparable)
+        return AnswerExtractionResult(raw_answer, _format_extracted_answer(extracted, answer_format), self.name, self.paper_comparable)
 
 
 class HeuristicAnswerExtractor(AnswerExtractor):
@@ -62,7 +103,12 @@ class HeuristicAnswerExtractor(AnswerExtractor):
     def extract(self, question: str, raw_answer: str, answer_format: str | None = None) -> AnswerExtractionResult:
         json_answer = _answer_from_json(raw_answer)
         if json_answer is not None:
-            return AnswerExtractionResult(raw_answer, _clean_candidate(json_answer), self.name, self.paper_comparable)
+            return AnswerExtractionResult(
+                raw_answer,
+                _format_extracted_answer(json_answer, answer_format),
+                self.name,
+                self.paper_comparable,
+            )
 
         text = raw_answer.strip()
         if not text:
@@ -76,18 +122,28 @@ class HeuristicAnswerExtractor(AnswerExtractor):
         ):
             match = re.search(pattern, text)
             if match:
-                return AnswerExtractionResult(raw_answer, _clean_candidate(match.group(1)), self.name, self.paper_comparable)
+                return AnswerExtractionResult(
+                    raw_answer,
+                    _format_extracted_answer(match.group(1), answer_format),
+                    self.name,
+                    self.paper_comparable,
+                )
 
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if len(lines) == 1:
-            return AnswerExtractionResult(raw_answer, _clean_candidate(lines[0]), self.name, self.paper_comparable)
+            return AnswerExtractionResult(
+                raw_answer,
+                _format_extracted_answer(lines[0], answer_format),
+                self.name,
+                self.paper_comparable,
+            )
 
         bullet_lines = [line for line in lines if line.startswith(("-", "*", "•"))]
         if bullet_lines:
             extracted = [re.sub(r"^[-*•]\s*", "", line).strip() for line in bullet_lines]
             return AnswerExtractionResult(raw_answer, str(extracted), self.name, self.paper_comparable)
 
-        return AnswerExtractionResult(raw_answer, _clean_candidate(lines[0]), self.name, self.paper_comparable)
+        return AnswerExtractionResult(raw_answer, _format_extracted_answer(lines[0], answer_format), self.name, self.paper_comparable)
 
 
 class OpenAICompatibleAnswerExtractor(AnswerExtractor):
@@ -124,6 +180,7 @@ class OpenAICompatibleAnswerExtractor(AnswerExtractor):
             "is not found, return exactly: No answers found!\n\n"
             f"Question: {question}\n"
             f"Answer format: {answer_format or 'unknown'}\n"
+            f"Format instruction: {_format_instruction(answer_format)}\n"
             f"Model output:\n{raw_answer}\n\n"
             "Short answer:"
         )
@@ -144,7 +201,12 @@ class OpenAICompatibleAnswerExtractor(AnswerExtractor):
             response.raise_for_status()
             data = response.json()
             extracted = data["choices"][0]["message"]["content"]
-            return AnswerExtractionResult(raw_answer, _clean_candidate(str(extracted)), self.name, self.paper_comparable)
+            return AnswerExtractionResult(
+                raw_answer,
+                _format_extracted_answer(str(extracted), answer_format),
+                self.name,
+                self.paper_comparable,
+            )
         except Exception as exc:
             heuristic = HeuristicAnswerExtractor().extract(question, raw_answer, answer_format)
             return AnswerExtractionResult(raw_answer, heuristic.extracted_answer, self.name, False, str(exc))

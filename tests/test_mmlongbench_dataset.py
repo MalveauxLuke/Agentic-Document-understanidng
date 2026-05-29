@@ -28,6 +28,7 @@ def test_load_official_style_samples_and_zero_indexed_pages(tmp_path):
     assert len(examples) == 1
     assert examples[0].question_id == "0"
     assert examples[0].evidence_pages == [0, 2]
+    assert examples[0].source_evidence_pages == [0, 2]
     assert examples[0].categories == ["Pure-text", "Table"]
     assert Path(examples[0].pdf_path).name == "doc-a.pdf"
 
@@ -39,6 +40,8 @@ def test_load_bundled_sample_from_repo_root():
     assert len(examples) == 1
     assert examples[0].doc_id.endswith(".pdf")
     assert examples[0].question == "WHAT IS USCA CASE NUMBER?"
+    assert examples[0].evidence_pages == [0]
+    assert examples[0].source_evidence_pages == [1]
     assert examples[0].categories == ["Pure-text"]
     assert Path(examples[0].pdf_path).exists()
 

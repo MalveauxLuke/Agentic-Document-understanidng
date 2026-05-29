@@ -9,6 +9,7 @@ from sleuth.agents.clue_discovery import ClueDiscoveryAgent
 from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
 from sleuth.agents.page_screening import PageScreeningAgent
+from sleuth.agents.prompts import display_page_number
 from sleuth.documents.page_store import build_document_pages
 from sleuth.evaluation.answer_extraction import AnswerExtractor, HeuristicAnswerExtractor
 from sleuth.evaluation.dataset import MMLongBenchExample
@@ -31,7 +32,7 @@ from sleuth.utils.file_utils import ensure_dir, write_text
 from sleuth.utils.json_utils import extract_json_from_text, load_json, save_json
 
 
-PIPELINE_CACHE_VERSION = "paper-faithful-recovery-v1"
+PIPELINE_CACHE_VERSION = "paper-faithful-mismatch-recovery-v2"
 
 
 def _model_dump(obj: Any) -> Any:
@@ -59,6 +60,10 @@ def _safe_id(value: str) -> str:
 
 def _short_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _display_pages(page_indices: list[int]) -> list[int]:
+    return [display_page_number(index) for index in page_indices]
 
 
 def _document_cache_dir(cache_dir: Path, doc_id: str) -> Path:
@@ -240,13 +245,27 @@ def _retrieval_diagnostics(example: MMLongBenchExample, retrieved_pages: list[Re
     if not gold_pages:
         return {
             "gold_evidence_pages": gold_pages,
+            "gold_display_page_numbers": _display_pages(gold_pages),
             "gold_hit_at_k": None,
+            "gold_all_hit_at_k": None,
+            "gold_page_recall_at_k": None,
+            "gold_retrieved_pages": [],
+            "gold_retrieved_display_page_numbers": [],
             "gold_missed_pages": [],
+            "gold_missed_display_page_numbers": [],
         }
+    gold_retrieved_pages = [page for page in gold_pages if page in retrieved_set]
+    gold_missed_pages = [page for page in gold_pages if page not in retrieved_set]
     return {
         "gold_evidence_pages": gold_pages,
+        "gold_display_page_numbers": _display_pages(gold_pages),
         "gold_hit_at_k": bool(set(gold_pages) & retrieved_set),
-        "gold_missed_pages": [page for page in gold_pages if page not in retrieved_set],
+        "gold_all_hit_at_k": set(gold_pages).issubset(retrieved_set),
+        "gold_page_recall_at_k": len(gold_retrieved_pages) / len(gold_pages),
+        "gold_retrieved_pages": gold_retrieved_pages,
+        "gold_retrieved_display_page_numbers": _display_pages(gold_retrieved_pages),
+        "gold_missed_pages": gold_missed_pages,
+        "gold_missed_display_page_numbers": _display_pages(gold_missed_pages),
     }
 
 
@@ -269,6 +288,9 @@ def _stage_diagnostics(
         }
     )
     retained_pages = sorted({screen.page_index for screen in page_screening_outputs if screen.keep_page})
+    clue_gold_pages = sorted(gold_pages & set(clue_pages))
+    clue_non_gold_pages = sorted(set(clue_pages) - gold_pages)
+    clue_missed_gold_pages = sorted(gold_pages - set(clue_pages))
     visual_categories = {"Chart", "Table", "Figure", "Layout"}
     has_visual_gold = bool(set(example.categories) & visual_categories)
     clue_hit_gold = bool(gold_pages & set(clue_pages)) if gold_pages and method == "sleuth" else None
@@ -280,8 +302,10 @@ def _stage_diagnostics(
         failure_label = "correct"
     elif retrieval["gold_hit_at_k"] is False:
         failure_label = "retrieval_miss"
-    elif method == "sleuth" and clue_hit_gold is False:
+    elif method == "sleuth" and not clue_pages:
         failure_label = "clue_miss"
+    elif method == "sleuth" and clue_hit_gold is False:
+        failure_label = "clue_gold_miss"
     elif method == "sleuth" and screening_retained_gold is False:
         failure_label = "screening_drop"
     elif raw_score > score:
@@ -292,8 +316,17 @@ def _stage_diagnostics(
     return {
         **retrieval,
         "clue_pages_with_evidence": clue_pages,
+        "clue_display_page_numbers_with_evidence": _display_pages(clue_pages),
+        "clue_gold_pages_with_evidence": clue_gold_pages,
+        "clue_gold_display_page_numbers_with_evidence": _display_pages(clue_gold_pages),
+        "clue_non_gold_pages_with_evidence": clue_non_gold_pages,
+        "clue_non_gold_display_page_numbers_with_evidence": _display_pages(clue_non_gold_pages),
+        "clue_missed_gold_pages": clue_missed_gold_pages,
+        "clue_missed_gold_display_page_numbers": _display_pages(clue_missed_gold_pages),
+        "clue_has_any_evidence": bool(clue_pages) if method == "sleuth" else None,
         "clue_hit_gold": clue_hit_gold,
         "screening_retained_page_indices": retained_pages,
+        "screening_retained_display_page_numbers": _display_pages(retained_pages),
         "screening_retained_gold": screening_retained_gold,
         "failure_label": failure_label,
     }
@@ -314,6 +347,7 @@ class MMLongBenchEvaluator:
         sol_instruction_text: str | None,
         max_tokens: dict[str, int],
         answer_extractor: AnswerExtractor | None = None,
+        region_refinement: str = "fallback",
     ) -> None:
         self.output_dir = ensure_dir(output_dir)
         self.cache_dir = ensure_dir(self.output_dir / "cache")
@@ -327,6 +361,7 @@ class MMLongBenchEvaluator:
         self.max_tokens = max_tokens
         self.answer_extractor = answer_extractor or HeuristicAnswerExtractor()
         self.pipeline_cache_version = PIPELINE_CACHE_VERSION
+        self.region_refinement = region_refinement
 
         self.agent_prompt_markdown = load_agent_prompt_markdown(agent_prompts_md)
         save_instruction_copy(self.agent_prompt_markdown, self.output_dir / "agent_prompts_used.md")
@@ -339,6 +374,7 @@ class MMLongBenchEvaluator:
             sol_instruction_text=sol_instruction_text,
             temperature=temperature,
             max_new_tokens=max_tokens.get("clue_discovery", 3072),
+            region_refinement=region_refinement,
         )
         self.page_screening_agent = PageScreeningAgent(
             llm_client,
@@ -371,6 +407,7 @@ class MMLongBenchEvaluator:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "pipeline_cache_version": self.pipeline_cache_version,
+                    "region_refinement": region_refinement,
                     "llm": getattr(llm_client, "model_name_or_path", llm_client.__class__.__name__),
                     "prompts": self.agent_prompt_markdown,
                 },
@@ -449,9 +486,13 @@ class MMLongBenchEvaluator:
             "category": example.categories[0] if example.categories else "None",
             "categories": example.categories,
             "evidence_pages": example.evidence_pages,
+            "source_evidence_pages": example.source_evidence_pages,
+            "evidence_display_page_numbers": _display_pages(example.evidence_pages),
             "gold_evidence_pages": diagnostics["gold_evidence_pages"],
+            "gold_display_page_numbers": diagnostics["gold_display_page_numbers"],
             "evidence_sources": example.evidence_sources,
             "retrieved_page_indices": [page.page_index for page in retrieved_pages],
+            "retrieved_display_page_numbers": _display_pages([page.page_index for page in retrieved_pages]),
             "retrieved_pages": _model_dump(retrieved_pages),
             "clue_output": _model_dump(clue_outputs),
             "page_screening_output": _model_dump(page_screening_outputs),
@@ -471,6 +512,7 @@ class MMLongBenchEvaluator:
         metrics["answer_extractor_model"] = getattr(self.answer_extractor, "model", None)
         metrics["answer_extractor_base_url"] = getattr(self.answer_extractor, "base_url", None)
         metrics["pipeline_cache_version"] = self.pipeline_cache_version
+        metrics["region_refinement"] = self.region_refinement
         metrics["paper_comparable_scoring"] = (
             all(item.get("paper_comparable_scoring") for item in predictions)
             if predictions

@@ -107,6 +107,7 @@ def main() -> None:
         save_instruction_copy(sol_instruction_text, final_dir / "sol_instructions_used.md")
 
     max_tokens = get_nested(config, ["model", "max_new_tokens"], {})
+    region_refinement = str(get_nested(config, ["pipeline", "region_refinement"], "fallback"))
     llm_client = build_llm(
         llm_name,
         config,
@@ -120,6 +121,7 @@ def main() -> None:
         sol_instruction_text=sol_instruction_text,
         temperature=args.temperature,
         max_new_tokens=int(max_tokens.get("clue_discovery", 3072)),
+        region_refinement=region_refinement,
     )
     page_screening_agent = PageScreeningAgent(
         llm_client=llm_client,

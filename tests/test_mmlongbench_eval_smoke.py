@@ -47,11 +47,27 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     prediction = json.loads(prediction_lines[0])
     assert prediction["document_id"].endswith(".pdf")
     assert prediction["retrieved_page_indices"] == [0]
+    assert prediction["retrieved_display_page_numbers"] == [1]
     assert prediction["raw_model_answer"]
     assert prediction["extracted_answer"]
     assert "raw_score" in prediction
     assert "gold_hit_at_k" in prediction
+    assert prediction["source_evidence_pages"] == [1]
+    assert prediction["gold_evidence_pages"] == [0]
+    assert prediction["gold_display_page_numbers"] == [1]
+    assert "gold_all_hit_at_k" in prediction
+    assert "gold_page_recall_at_k" in prediction
+    assert "gold_retrieved_pages" in prediction
+    assert "gold_retrieved_display_page_numbers" in prediction
     assert "gold_missed_pages" in prediction
+    assert "gold_missed_display_page_numbers" in prediction
+    assert "clue_has_any_evidence" in prediction
+    assert "clue_gold_pages_with_evidence" in prediction
+    assert "clue_gold_display_page_numbers_with_evidence" in prediction
+    assert "clue_non_gold_pages_with_evidence" in prediction
+    assert "clue_non_gold_display_page_numbers_with_evidence" in prediction
+    assert "clue_missed_gold_pages" in prediction
+    assert "clue_missed_gold_display_page_numbers" in prediction
     assert "failure_label" in prediction
     assert prediction["clue_output"]
     assert prediction["page_screening_output"]
@@ -64,11 +80,16 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert metrics["failed"] == 0
     assert "raw_average_score" in metrics
     assert "gold_hit_at_k_rate" in metrics
+    assert "gold_all_hit_at_k_rate" in metrics
+    assert "gold_page_recall_at_k_average" in metrics
+    assert "clue_has_any_evidence_rate" in metrics
     assert "answer_extractor_model" in metrics
     assert "answer_extractor_base_url" in metrics
     assert metrics["pipeline_cache_version"]
+    assert metrics["region_refinement"] == "fallback"
 
     run_config = json.loads((output_dir / "run_config.json").read_text(encoding="utf-8"))
     assert "answer_extractor_model" in run_config
     assert "answer_extractor_base_url" in run_config
     assert run_config["pipeline_cache_version"] == metrics["pipeline_cache_version"]
+    assert run_config["region_refinement"] == metrics["region_refinement"]

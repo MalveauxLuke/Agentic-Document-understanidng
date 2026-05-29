@@ -18,6 +18,7 @@ class MMLongBenchExample:
     question: str
     answer: str
     evidence_pages: list[int]
+    source_evidence_pages: list[int]
     evidence_sources: list[str]
     answer_format: str
     pdf_path: str
@@ -42,6 +43,12 @@ def _parse_list(value: Any) -> list:
             return [stripped]
         return parsed if isinstance(parsed, list) else [parsed]
     return [value]
+
+
+def _normalize_evidence_pages(raw_pages: list[int]) -> list[int]:
+    if raw_pages and min(raw_pages) > 0:
+        return [page - 1 for page in raw_pages]
+    return raw_pages
 
 
 def _load_json(path: Path) -> Any:
@@ -98,7 +105,8 @@ def load_mmlongbench_examples(
 
     for row_index, row in enumerate(rows):
         effective_row_index = int(row.get("row_index", row_index))
-        evidence_pages = [int(page) for page in _parse_list(row.get("evidence_pages"))]
+        source_evidence_pages = [int(page) for page in _parse_list(row.get("evidence_pages"))]
+        evidence_pages = _normalize_evidence_pages(source_evidence_pages)
         evidence_sources = [str(source) for source in _parse_list(row.get("evidence_sources"))]
         categories = normalize_categories(evidence_sources)
         if category_filter and category_filter not in categories:
@@ -115,6 +123,7 @@ def load_mmlongbench_examples(
                 question=str(row["question"]),
                 answer=str(row["answer"]),
                 evidence_pages=evidence_pages,
+                source_evidence_pages=source_evidence_pages,
                 evidence_sources=evidence_sources,
                 answer_format=str(row.get("answer_format", "Str")),
                 pdf_path=str(pdf_path),

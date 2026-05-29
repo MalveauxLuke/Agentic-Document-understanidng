@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sleuth.agents.prompts import display_page_number
 from sleuth.schemas import (
     ClueDiscoveryOutput,
     DocumentPage,
@@ -12,16 +13,17 @@ from sleuth.schemas import (
 def build_evidence_summary(clue_outputs: list[ClueDiscoveryOutput]) -> str:
     lines: list[str] = []
     for clue_output in clue_outputs:
+        page_label = display_page_number(clue_output.page_index)
         if not clue_output.evidence_items:
             if clue_output.page_summary.strip() or clue_output.key_insights.strip():
-                lines.append(f"Page index {clue_output.page_index}:")
+                lines.append(f"Page Number {page_label}:")
                 if clue_output.page_summary.strip():
                     lines.append(f"page_summary: {clue_output.page_summary.strip()}")
                 if clue_output.key_insights.strip():
                     lines.append(f"key_insights: {clue_output.key_insights.strip()}")
                 lines.append("")
             continue
-        lines.append(f"Page index {clue_output.page_index}:")
+        lines.append(f"Page Number {page_label}:")
         if clue_output.page_summary.strip():
             lines.append(f"page_summary: {clue_output.page_summary.strip()}")
         if clue_output.key_insights.strip():
@@ -36,31 +38,14 @@ def build_evidence_summary(clue_outputs: list[ClueDiscoveryOutput]) -> str:
     return summary or "No relevant evidence was extracted."
 
 
-def build_visual_screening_summary(page_screening_outputs: list[PageScreeningOutput]) -> str:
-    retained = [screening for screening in page_screening_outputs if screening.keep_page]
-    if not retained:
-        return ""
-
-    lines = ["Retained visual evidence:"]
-    for screening in retained:
-        lines.append(f"Page index {screening.page_index}:")
-        lines.append(f"screening_relevance: {screening.relevance}")
-        if screening.reasoning.strip():
-            lines.append(f"screening_reasoning: {screening.reasoning.strip()}")
-    return "\n".join(lines).strip()
-
-
 def build_multimodal_evidence_summary(
     clue_outputs: list[ClueDiscoveryOutput],
     page_screening_outputs: list[PageScreeningOutput],
 ) -> str:
-    clue_summary = build_evidence_summary(clue_outputs)
-    visual_summary = build_visual_screening_summary(page_screening_outputs)
-    if not visual_summary:
-        return clue_summary
-    if clue_summary == "No relevant evidence was extracted.":
-        return visual_summary
-    return f"{clue_summary}\n\n{visual_summary}"
+    # Paper-faithful final context is C=(P,E): E is Clue evidence text, while
+    # Page Screening contributes retained images P and remains in diagnostics.
+    _ = page_screening_outputs
+    return build_evidence_summary(clue_outputs)
 
 
 def build_evidence_context(
@@ -79,7 +64,7 @@ def build_evidence_context(
         for index in retained_page_indices
         if index in page_lookup
     ]
-    evidence_summary = build_multimodal_evidence_summary(clue_outputs, page_screening_outputs)
+    evidence_summary = build_evidence_summary(clue_outputs)
     return EvidenceContext(
         question=question,
         retrieved_pages=retrieved_pages,

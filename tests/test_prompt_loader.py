@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from sleuth.agents.prompts import build_clue_discovery_prompt
+from sleuth.agents.prompts import (
+    build_clue_discovery_prompt,
+    build_core_decision_prompt,
+    build_page_screening_prompt,
+)
 from sleuth.instructions.prompt_loader import get_prompt_section, load_agent_prompt_markdown
 
 
@@ -40,4 +44,32 @@ def test_prompt_builder_does_not_add_removed_noise():
     assert "This extracted text should not be appended." not in prompt
     assert "Return valid JSON only. Do not wrap" not in prompt
     assert "What changed?" in prompt
-    assert "Page Number: 3" in prompt
+    assert "Page Number: 4" in prompt
+
+
+def test_page_screening_prompt_uses_display_page_number():
+    text = load_agent_prompt_markdown(ROOT / "agent_prompts.md")
+    section = get_prompt_section(text, "page_screening")
+    prompt = build_page_screening_prompt(
+        question="Which chart?",
+        page_index=0,
+        agent_prompt_text=section,
+    )
+    assert "Page Number: 1" in prompt
+
+
+def test_core_visual_prompt_uses_display_page_numbers():
+    text_prompt = "Text EVIDENCE: {evidence_summary}"
+    visual_prompt = "{visual_evidence_section}\nEVIDENCE: {evidence_summary}"
+    prompt = build_core_decision_prompt(
+        question="Which page?",
+        instruction_set="Use visual pages.",
+        evidence_summary="Evidence.",
+        retained_page_indices=[0, 3],
+        retained_image_paths=["/tmp/page_0001.png", "/tmp/page_0004.png"],
+        text_agent_prompt_text=text_prompt,
+        visual_agent_prompt_text=visual_prompt,
+    )
+    assert "Page Number 1" in prompt
+    assert "Page Number 4" in prompt
+    assert "Page index" not in prompt

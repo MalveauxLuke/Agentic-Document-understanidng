@@ -18,6 +18,7 @@ pipeline:
   mode: mock
   save_intermediates: true
   render_dpi: 144
+  region_refinement: fallback
 
 paths:
   agent_prompts_md: agent_prompts.md

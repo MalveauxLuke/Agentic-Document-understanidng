@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from sleuth.agents._helpers import validate_model
-from sleuth.agents.prompts import build_core_decision_text_prompt, build_core_decision_visual_prompt
+from sleuth.agents.prompts import (
+    build_core_decision_text_prompt,
+    build_core_decision_visual_prompt,
+    display_page_number,
+)
 from sleuth.llm.base import LLMClient
 from sleuth.schemas import DifficultyOutput, EvidenceContext, FinalAnswer
 from sleuth.utils.json_utils import extract_json_from_text
@@ -46,7 +50,8 @@ class CoreDecisionAgent:
     def _build_prompt(self, question: str, evidence_context: EvidenceContext, difficulty_output: DifficultyOutput) -> str:
         if evidence_context.retained_image_paths:
             page_lines = "\n".join(
-                f"- Page index {page_index}" for page_index in evidence_context.retained_page_indices
+                f"- Page Number {display_page_number(page_index)}"
+                for page_index in evidence_context.retained_page_indices
             )
             visual_evidence_section = (
                 "The following page images are provided as visual evidence:\n"

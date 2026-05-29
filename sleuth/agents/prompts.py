@@ -8,6 +8,10 @@ constraints.
 from __future__ import annotations
 
 
+def display_page_number(page_index: int) -> int:
+    return page_index + 1
+
+
 def format_sol_instruction_block(sol_instruction_text: str | None) -> str:
     return ""
 
@@ -30,14 +34,15 @@ def build_clue_discovery_prompt(
     agent_prompt_text: str,
     sol_instruction_text: str | None = None,
 ) -> str:
+    page_number = str(display_page_number(page_index))
     prompt = _fill_placeholders(
         agent_prompt_text,
         {
             "question": question,
-            "page_num": str(page_index),
-            "page_number": str(page_index),
-            "page num": str(page_index),
-            "page number": str(page_index),
+            "page_num": page_number,
+            "page_number": page_number,
+            "page num": page_number,
+            "page number": page_number,
         },
     )
     return _compose_prompt(prompt, sol_instruction_text)
@@ -49,14 +54,15 @@ def build_page_screening_prompt(
     agent_prompt_text: str,
     sol_instruction_text: str | None = None,
 ) -> str:
+    page_number = str(display_page_number(page_index))
     prompt = _fill_placeholders(
         agent_prompt_text,
         {
             "question": question,
-            "page_num": str(page_index),
-            "page_number": str(page_index),
-            "page num": str(page_index),
-            "page number": str(page_index),
+            "page_num": page_number,
+            "page_number": page_number,
+            "page num": page_number,
+            "page number": page_number,
         },
     )
     return _compose_prompt(prompt, sol_instruction_text)
@@ -139,7 +145,9 @@ def build_core_decision_prompt(
     sol_instruction_text: str | None = None,
 ) -> str:
     if retained_image_paths:
-        page_lines = "\n".join(f"- Page index {page_index}" for page_index in retained_page_indices)
+        page_lines = "\n".join(
+            f"- Page Number {display_page_number(page_index)}" for page_index in retained_page_indices
+        )
         visual_evidence_section = (
             "The following page images are provided as visual evidence:\n"
             f"{page_lines}\n\n"
