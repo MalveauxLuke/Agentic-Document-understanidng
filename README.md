@@ -178,6 +178,17 @@ again with:
 python scripts/show_mmlongbench_results.py /scratch/$USER/agenticdocai/runs/<run_dir>
 ```
 
+To inspect ColPali retrieval behavior for failed cases, generate a visual report
+with copied page images and contact sheets:
+
+```bash
+python scripts/analyze_colpali_failures.py 53765133 --limit 30
+```
+
+This writes `colpali_failure_analysis/index.html` and `summary.md` under the run
+directory. Pass `--label retrieval_miss`, `--label clue_miss`, or `--qid <id>`
+to zoom in on specific failures.
+
 ## SOL Mode
 
 SOL mode requires `sol_instructions.md`, Qwen3-VL dependencies, and ColPali:
