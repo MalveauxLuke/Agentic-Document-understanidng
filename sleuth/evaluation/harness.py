@@ -8,7 +8,7 @@ from typing import Any
 from sleuth.agents.clue_discovery import ClueDiscoveryAgent
 from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
-from sleuth.agents.page_screening import PageScreeningAgent
+from sleuth.agents.evidence_verification import EvidenceVerificationAgent
 from sleuth.agents.prompts import display_page_number
 from sleuth.documents.page_store import build_document_pages
 from sleuth.evaluation.answer_extraction import AnswerExtractor, HeuristicAnswerExtractor
@@ -24,21 +24,22 @@ from sleuth.schemas import (
     ClueDiscoveryOutput,
     DifficultyOutput,
     DocumentPage,
+    EvidenceVerificationOutput,
     FinalAnswer,
-    PageScreeningOutput,
     RetrievedPage,
 )
 from sleuth.utils.file_utils import ensure_dir, write_text
 from sleuth.utils.json_utils import extract_json_from_text, load_json, save_json
 
 
-PIPELINE_CACHE_VERSION = "paper-faithful-thinking-recovery-v3"
+PIPELINE_CACHE_VERSION = "sleuth-verify-crop-faithfulness-v4"
 AGENT_SOURCE_FILES = [
     "sleuth/agents/clue_discovery.py",
-    "sleuth/agents/page_screening.py",
+    "sleuth/agents/evidence_verification.py",
     "sleuth/agents/difficulty_assessment.py",
     "sleuth/agents/core_decision.py",
     "sleuth/agents/prompts.py",
+    "sleuth/documents/evidence_crops.py",
     "sleuth/pipeline/context_builder.py",
 ]
 
@@ -208,15 +209,15 @@ def run_sleuth_example(
     pages: list[DocumentPage],
     retrieved_pages: list[RetrievedPage],
     clue_agent: ClueDiscoveryAgent,
-    page_screening_agent: PageScreeningAgent,
+    evidence_verification_agent: EvidenceVerificationAgent,
     difficulty_agent: DifficultyAssessmentAgent,
     core_decision_agent: CoreDecisionAgent,
     cache_dir: Path,
     cache_fingerprint: str,
-) -> tuple[FinalAnswer, list[ClueDiscoveryOutput], list[PageScreeningOutput], DifficultyOutput]:
+) -> tuple[FinalAnswer, list[ClueDiscoveryOutput], list[EvidenceVerificationOutput], DifficultyOutput]:
     page_lookup = {page.page_index: page for page in pages}
     clue_outputs: list[ClueDiscoveryOutput] = []
-    page_screening_outputs: list[PageScreeningOutput] = []
+    verification_outputs: list[EvidenceVerificationOutput] = []
 
     for retrieved_page in retrieved_pages:
         page = page_lookup.get(retrieved_page.page_index)
@@ -231,20 +232,24 @@ def run_sleuth_example(
             save_json(clue_cache, clue_output)
         clue_outputs.append(clue_output)
 
-        screen_cache = _agent_cache_path(cache_dir, example, "screen", page.page_index, cache_fingerprint)
-        if screen_cache.exists():
-            screening_output = _load_agent_output(screen_cache, PageScreeningOutput)
+        verify_cache = _agent_cache_path(cache_dir, example, "verify", page.page_index, cache_fingerprint)
+        if verify_cache.exists():
+            page_verification_outputs = [
+                _model_validate(EvidenceVerificationOutput, item)
+                for item in load_json(verify_cache)
+            ]
         else:
-            screening_output = page_screening_agent.run(example.question, page)
-            save_json(screen_cache, screening_output)
-        page_screening_outputs.append(screening_output)
+            page_verification_outputs = evidence_verification_agent.run(example.question, page, clue_output)
+            save_json(verify_cache, page_verification_outputs)
+        verification_outputs.extend(page_verification_outputs)
 
     evidence_context = build_evidence_context(
         question=example.question,
         pages=pages,
         retrieved_pages=retrieved_pages,
         clue_outputs=clue_outputs,
-        page_screening_outputs=page_screening_outputs,
+        page_screening_outputs=[],
+        verification_outputs=verification_outputs,
     )
 
     difficulty_cache = _agent_cache_path(cache_dir, example, "difficulty", cache_fingerprint=cache_fingerprint)
@@ -255,7 +260,7 @@ def run_sleuth_example(
         save_json(difficulty_cache, difficulty)
 
     final_answer = core_decision_agent.run(example.question, evidence_context, difficulty)
-    return final_answer, clue_outputs, page_screening_outputs, difficulty
+    return final_answer, clue_outputs, verification_outputs, difficulty
 
 
 def _retrieval_diagnostics(example: MMLongBenchExample, retrieved_pages: list[RetrievedPage]) -> dict[str, Any]:
@@ -294,7 +299,7 @@ def _stage_diagnostics(
     example: MMLongBenchExample,
     retrieved_pages: list[RetrievedPage],
     clue_outputs: list[ClueDiscoveryOutput],
-    page_screening_outputs: list[PageScreeningOutput],
+    verification_outputs: list[EvidenceVerificationOutput],
     score: float,
     raw_score: float,
 ) -> dict[str, Any]:
@@ -307,16 +312,28 @@ def _stage_diagnostics(
             if clue.has_relevant_evidence or clue.evidence_items
         }
     )
-    retained_pages = sorted({screen.page_index for screen in page_screening_outputs if screen.keep_page})
+    accepted_verifications = [
+        output
+        for output in verification_outputs
+        if output.verification_status in {"faithful", "corrected"} and output.faithful_evidence is not None
+    ]
+    retained_pages = sorted({output.page_index for output in accepted_verifications})
     clue_gold_pages = sorted(gold_pages & set(clue_pages))
     clue_non_gold_pages = sorted(set(clue_pages) - gold_pages)
     clue_missed_gold_pages = sorted(gold_pages - set(clue_pages))
-    visual_categories = {"Chart", "Table", "Figure", "Layout"}
-    has_visual_gold = bool(set(example.categories) & visual_categories)
     clue_hit_gold = bool(gold_pages & set(clue_pages)) if gold_pages and method == "sleuth" else None
-    screening_retained_gold = (
-        bool(gold_pages & set(retained_pages)) if gold_pages and has_visual_gold and method == "sleuth" else None
+    verification_retained_gold = (
+        bool(gold_pages & set(retained_pages)) if gold_pages and method == "sleuth" else None
     )
+    verification_rejected_count = sum(1 for output in verification_outputs if output.verification_status == "rejected")
+    verification_uncertain_count = sum(1 for output in verification_outputs if output.verification_status == "uncertain")
+    verification_full_page_fallback_count = sum(1 for output in verification_outputs if output.used_full_page_fallback)
+    verified_image_paths = []
+    seen_verified_images: set[str] = set()
+    for output in accepted_verifications:
+        if output.input_image_path and output.input_image_path not in seen_verified_images:
+            seen_verified_images.add(output.input_image_path)
+            verified_image_paths.append(output.input_image_path)
 
     if score > 0.0:
         failure_label = "correct"
@@ -326,8 +343,8 @@ def _stage_diagnostics(
         failure_label = "clue_miss"
     elif method == "sleuth" and clue_hit_gold is False:
         failure_label = "clue_gold_miss"
-    elif method == "sleuth" and screening_retained_gold is False:
-        failure_label = "screening_drop"
+    elif method == "sleuth" and verification_retained_gold is False:
+        failure_label = "verification_drop"
     elif raw_score > score:
         failure_label = "scoring_or_extraction_mismatch"
     else:
@@ -345,9 +362,18 @@ def _stage_diagnostics(
         "clue_missed_gold_display_page_numbers": _display_pages(clue_missed_gold_pages),
         "clue_has_any_evidence": bool(clue_pages) if method == "sleuth" else None,
         "clue_hit_gold": clue_hit_gold,
-        "screening_retained_page_indices": retained_pages,
-        "screening_retained_display_page_numbers": _display_pages(retained_pages),
-        "screening_retained_gold": screening_retained_gold,
+        "screening_retained_page_indices": [],
+        "screening_retained_display_page_numbers": [],
+        "screening_retained_gold": None,
+        "verification_accepted_page_indices": retained_pages,
+        "verification_accepted_display_page_numbers": _display_pages(retained_pages),
+        "verification_accepted_gold_pages": sorted(gold_pages & set(retained_pages)),
+        "verification_accepted_gold_display_page_numbers": _display_pages(sorted(gold_pages & set(retained_pages))),
+        "verification_retained_gold": verification_retained_gold,
+        "verification_rejected_count": verification_rejected_count,
+        "verification_uncertain_count": verification_uncertain_count,
+        "verification_full_page_fallback_count": verification_full_page_fallback_count,
+        "verified_image_paths": verified_image_paths,
         "failure_label": failure_label,
     }
 
@@ -406,12 +432,14 @@ class MMLongBenchEvaluator:
             max_new_tokens=max_tokens.get("clue_discovery", 3072),
             region_refinement=region_refinement,
         )
-        self.page_screening_agent = PageScreeningAgent(
+        self.evidence_verification_agent = EvidenceVerificationAgent(
             llm_client,
-            get_prompt_section(self.agent_prompt_markdown, "page_screening"),
+            get_prompt_section(self.agent_prompt_markdown, "evidence_verification_crop"),
+            get_prompt_section(self.agent_prompt_markdown, "evidence_verification_full_page"),
             sol_instruction_text=sol_instruction_text,
             temperature=temperature,
-            max_new_tokens=max_tokens.get("page_screening", 512),
+            crop_max_new_tokens=max_tokens.get("evidence_verification_crop", 2048),
+            full_page_max_new_tokens=max_tokens.get("evidence_verification_full_page", 2048),
         )
         self.difficulty_agent = DifficultyAssessmentAgent(
             llm_client,
@@ -468,7 +496,7 @@ class MMLongBenchEvaluator:
         )
 
         clue_outputs: list[ClueDiscoveryOutput] = []
-        page_screening_outputs: list[PageScreeningOutput] = []
+        verification_outputs: list[EvidenceVerificationOutput] = []
         difficulty_output: DifficultyOutput | None = None
 
         if self.method == "base":
@@ -481,12 +509,12 @@ class MMLongBenchEvaluator:
                 max_new_tokens=self.max_tokens.get("core_decision", 512),
             )
         elif self.method == "sleuth":
-            final_answer, clue_outputs, page_screening_outputs, difficulty_output = run_sleuth_example(
+            final_answer, clue_outputs, verification_outputs, difficulty_output = run_sleuth_example(
                 example,
                 pages,
                 retrieved_pages,
                 self.clue_agent,
-                self.page_screening_agent,
+                self.evidence_verification_agent,
                 self.difficulty_agent,
                 self.core_decision_agent,
                 self.cache_dir,
@@ -503,7 +531,7 @@ class MMLongBenchEvaluator:
             example=example,
             retrieved_pages=retrieved_pages,
             clue_outputs=clue_outputs,
-            page_screening_outputs=page_screening_outputs,
+            verification_outputs=verification_outputs,
             score=score,
             raw_score=raw_score,
         )
@@ -536,7 +564,9 @@ class MMLongBenchEvaluator:
             "retrieved_display_page_numbers": _display_pages([page.page_index for page in retrieved_pages]),
             "retrieved_pages": _model_dump(retrieved_pages),
             "clue_output": _model_dump(clue_outputs),
-            "page_screening_output": _model_dump(page_screening_outputs),
+            "page_screening_output": [],
+            "verification_output": _model_dump(verification_outputs),
+            "verified_image_paths": diagnostics["verified_image_paths"],
             "difficulty_output": _model_dump(difficulty_output) if difficulty_output is not None else None,
             "final_prompt": final_answer.prompt_used,
             "raw_response": final_answer.raw_output,
@@ -562,6 +592,8 @@ class MMLongBenchEvaluator:
         metrics["thinking_model"] = self.thinking_model
         metrics["difficulty_model_switching_enabled"] = self.difficulty_model_switching_enabled
         metrics["core_decision_thinking_max_tokens"] = self.max_tokens.get("core_decision_thinking")
+        metrics["evidence_verification_crop_max_tokens"] = self.max_tokens.get("evidence_verification_crop")
+        metrics["evidence_verification_full_page_max_tokens"] = self.max_tokens.get("evidence_verification_full_page")
         metrics["paper_comparable_scoring"] = (
             all(item.get("paper_comparable_scoring") for item in predictions)
             if predictions

@@ -3,6 +3,7 @@ from pathlib import Path
 from sleuth.agents.prompts import (
     build_clue_discovery_prompt,
     build_core_decision_prompt,
+    build_evidence_verification_crop_prompt,
     build_page_screening_prompt,
 )
 from sleuth.instructions.prompt_loader import get_prompt_section, load_agent_prompt_markdown
@@ -21,6 +22,8 @@ def test_extract_required_sections_or_safe_fallback():
     for section_name in [
         "clue_discovery",
         "page_screening",
+        "evidence_verification_crop",
+        "evidence_verification_full_page",
         "difficulty_assessment",
         "core_decision_text",
         "core_decision_visual",
@@ -45,6 +48,7 @@ def test_prompt_builder_does_not_add_removed_noise():
     assert "Return valid JSON only. Do not wrap" not in prompt
     assert "What changed?" in prompt
     assert "Page Number: 4" in prompt
+    assert "crop_region" in prompt
 
 
 def test_page_screening_prompt_uses_display_page_number():
@@ -56,6 +60,26 @@ def test_page_screening_prompt_uses_display_page_number():
         agent_prompt_text=section,
     )
     assert "Page Number: 1" in prompt
+
+
+def test_verification_prompt_uses_display_page_number_and_crop_metadata():
+    text = load_agent_prompt_markdown(ROOT / "agent_prompts.md")
+    section = get_prompt_section(text, "evidence_verification_crop")
+    prompt = build_evidence_verification_crop_prompt(
+        question="Which value?",
+        page_index=0,
+        crop_hint="upper_left",
+        crop_location="upper_left bbox=(0, 0, 50, 50)",
+        evidence_type="chart",
+        content='Value "42"',
+        location="chart",
+        relevance="direct",
+        confidence="high",
+        agent_prompt_text=section,
+    )
+    assert "Page Number: 1" in prompt
+    assert "Crop Hint: upper_left" in prompt
+    assert 'Value \\"42\\"' in prompt
 
 
 def test_core_visual_prompt_uses_display_page_numbers():

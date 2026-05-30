@@ -20,9 +20,10 @@ except ImportError:  # pragma: no cover - exercised only in minimal envs
 FAILURE_ORDER = {
     "retrieval_miss": 0,
     "clue_miss": 1,
-    "screening_drop": 2,
-    "final_wrong": 3,
-    "scoring_or_extraction_mismatch": 4,
+    "verification_drop": 2,
+    "screening_drop": 3,
+    "final_wrong": 4,
+    "scoring_or_extraction_mismatch": 5,
 }
 
 
@@ -147,11 +148,16 @@ def _make_contact_sheet(image_rows: list[dict[str, Any]], target_path: Path, thu
 def _page_status(item: dict[str, Any], page_index: int) -> dict[str, Any]:
     gold_pages = set(item.get("gold_evidence_pages") or item.get("evidence_pages") or [])
     clue_pages = set(item.get("clue_pages_with_evidence") or [])
-    retained_pages = set(item.get("screening_retained_page_indices") or [])
+    retained_pages = set(item.get("verification_accepted_page_indices") or item.get("screening_retained_page_indices") or [])
     clue_by_page = {clue.get("page_index"): clue for clue in item.get("clue_output", [])}
     screen_by_page = {screen.get("page_index"): screen for screen in item.get("page_screening_output", [])}
+    verification_by_page: dict[int, list[dict[str, Any]]] = {}
+    for verification in item.get("verification_output", []):
+        verification_by_page.setdefault(verification.get("page_index"), []).append(verification)
     clue = clue_by_page.get(page_index) or {}
     screen = screen_by_page.get(page_index) or {}
+    verifications = verification_by_page.get(page_index) or []
+    accepted = [v for v in verifications if v.get("verification_status") in {"faithful", "corrected"}]
     return {
         "is_gold": page_index in gold_pages,
         "has_clue": page_index in clue_pages,
@@ -161,6 +167,10 @@ def _page_status(item: dict[str, Any], page_index: int) -> dict[str, Any]:
         "clue_insights": clue.get("key_insights"),
         "screen_relevance": screen.get("relevance"),
         "screen_reasoning": screen.get("reasoning"),
+        "verification_items": len(verifications),
+        "verification_accepted": len(accepted),
+        "verification_statuses": ", ".join(str(v.get("verification_status")) for v in verifications[:5]),
+        "verification_fallbacks": sum(1 for v in verifications if v.get("used_full_page_fallback")),
     }
 
 
@@ -169,7 +179,7 @@ def _diagnose(item: dict[str, Any]) -> list[str]:
     retrieved_pages = [page.get("page_index") for page in item.get("retrieved_pages", [])]
     retrieved_set = {page for page in retrieved_pages if page is not None}
     clue_gold_pages = set(item.get("clue_gold_pages_with_evidence") or [])
-    retained_gold = bool(item.get("screening_retained_gold"))
+    retained_gold = bool(item.get("verification_retained_gold") or item.get("screening_retained_gold"))
     label = item.get("failure_label")
     notes: list[str] = []
 
@@ -198,13 +208,15 @@ def _diagnose(item: dict[str, Any]) -> list[str]:
             notes.append("Gold page retrieval succeeded, but Clue Discovery did not record evidence on a gold page.")
     elif label == "screening_drop":
         notes.append("A relevant visual page appears to have been filtered out before Core Decision received images.")
+    elif label == "verification_drop":
+        notes.append("Clue evidence existed, but verifier rejected or left uncertain the relevant evidence before Core Decision.")
     elif label == "final_wrong":
         notes.append("Evidence reached the final stage; the error is likely answer synthesis, counting, formatting, or visual value reading.")
     elif label == "scoring_or_extraction_mismatch":
         notes.append("Raw answer scored better than extracted answer; inspect answer extraction rather than ColPali.")
 
     if not retained_gold and gold_pages & retrieved_set:
-        notes.append("At least one gold page was retrieved but no gold visual page was retained by Page Screening.")
+        notes.append("At least one gold page was retrieved but no gold visual/evidence image was retained after filtering.")
     return notes
 
 
@@ -349,13 +361,14 @@ def _write_markdown(report_dir: Path, run_dir: Path, cases: list[dict[str, Any]]
         lines.append("Diagnosis:")
         lines.extend(f"- {note}" for note in case["diagnosis"])
         lines.append("")
-        lines.append("| Rank | Page | Score | Gold | Clue | Kept | Image |")
-        lines.append("| --- | ---: | ---: | --- | --- | --- | --- |")
+        lines.append("| Rank | Page | Score | Gold | Clue | Kept | Verify | Image |")
+        lines.append("| --- | ---: | ---: | --- | --- | --- | --- | --- |")
         for row in case["retrieved_rows"]:
             image = f"[png]({row['copied_path']})" if row.get("copied_path") else "missing"
             lines.append(
                 f"| {row['rank']} | {row['display_page']} | {float(row.get('score') or 0.0):.4f} | "
-                f"{row['is_gold']} | {row['has_clue']} | {row['kept_visual']} | {image} |"
+                f"{row['is_gold']} | {row['has_clue']} | {row['kept_visual']} | "
+                f"{row.get('verification_accepted', 0)}/{row.get('verification_items', 0)} | {image} |"
             )
         lines.append("")
         if case["gold_rows"]:
@@ -389,7 +402,7 @@ def _html_table(rows: list[dict[str, Any]]) -> str:
             f"<td>{row.get('has_clue')}</td>"
             f"<td>{row.get('kept_visual')}</td>"
             f"<td>{html.escape(_short(row.get('clue_summary'), 140))}</td>"
-            f"<td>{html.escape(str(row.get('screen_relevance') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('verification_statuses') or row.get('screen_relevance') or ''))}</td>"
             f"<td>{image_html}</td>"
             "</tr>"
         )
@@ -428,7 +441,7 @@ def _write_html(report_dir: Path, run_dir: Path, cases: list[dict[str, Any]], su
               <ul>{diagnosis}</ul>
               <h3>Retrieved ColPali Top-K</h3>
               <table>
-                <thead><tr><th>Rank</th><th>Page</th><th>Score</th><th>Gold</th><th>Clue</th><th>Kept</th><th>Clue Summary</th><th>Screen</th><th>Image</th></tr></thead>
+                <thead><tr><th>Rank</th><th>Page</th><th>Score</th><th>Gold</th><th>Clue</th><th>Kept</th><th>Clue Summary</th><th>Verify</th><th>Image</th></tr></thead>
                 <tbody>{_html_table(case["retrieved_rows"])}</tbody>
               </table>
               <h3>Gold Pages</h3>

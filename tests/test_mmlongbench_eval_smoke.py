@@ -70,7 +70,10 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert "clue_missed_gold_display_page_numbers" in prediction
     assert "failure_label" in prediction
     assert prediction["clue_output"]
-    assert prediction["page_screening_output"]
+    assert prediction["page_screening_output"] == []
+    assert prediction["verification_output"]
+    assert prediction["verification_accepted_page_indices"] == [0]
+    assert prediction["verified_image_paths"]
     assert prediction["difficulty_output"]
     assert prediction["difficulty_level"] == 0
     assert prediction["core_decision_mode"] == "instruct"
@@ -90,11 +93,14 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert "answer_extractor_model" in metrics
     assert "answer_extractor_base_url" in metrics
     assert metrics["pipeline_cache_version"]
-    assert metrics["region_refinement"] == "fallback"
+    assert metrics["region_refinement"] == "none"
     assert metrics["agent_source_fingerprint"]
     assert metrics["thinking_model"] is None
     assert metrics["difficulty_model_switching_enabled"] is False
     assert metrics["core_decision_thinking_max_tokens"] == 4096
+    assert metrics["evidence_verification_crop_max_tokens"] == 2048
+    assert metrics["evidence_verification_full_page_max_tokens"] == 2048
+    assert "verification_retained_gold_rate" in metrics
     assert metrics["core_decision_thinking_count"] == 0
     assert metrics["core_decision_thinking_total"] == 1
 
@@ -107,3 +113,5 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert run_config["thinking_model"] is None
     assert run_config["difficulty_model_switching_enabled"] is False
     assert run_config["core_decision_thinking_max_tokens"] == 4096
+    assert run_config["evidence_verification_crop_max_tokens"] == 2048
+    assert run_config["evidence_verification_full_page_max_tokens"] == 2048

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 from sleuth.agents.clue_discovery import ClueDiscoveryAgent
 from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
-from sleuth.agents.page_screening import PageScreeningAgent
+from sleuth.agents.evidence_verification import EvidenceVerificationAgent
 from sleuth.config import get_nested, load_config
 from sleuth.instructions.instruction_loader import read_markdown_file, save_instruction_copy
 from sleuth.instructions.prompt_loader import get_prompt_section, load_agent_prompt_markdown
@@ -151,12 +151,14 @@ def main() -> None:
         max_new_tokens=int(max_tokens.get("clue_discovery", 3072)),
         region_refinement=region_refinement,
     )
-    page_screening_agent = PageScreeningAgent(
+    evidence_verification_agent = EvidenceVerificationAgent(
         llm_client=llm_client,
-        agent_prompt_text=get_prompt_section(agent_prompt_markdown, "page_screening"),
+        crop_prompt_text=get_prompt_section(agent_prompt_markdown, "evidence_verification_crop"),
+        full_page_prompt_text=get_prompt_section(agent_prompt_markdown, "evidence_verification_full_page"),
         sol_instruction_text=sol_instruction_text,
         temperature=args.temperature,
-        max_new_tokens=int(max_tokens.get("page_screening", 512)),
+        crop_max_new_tokens=int(max_tokens.get("evidence_verification_crop", 2048)),
+        full_page_max_new_tokens=int(max_tokens.get("evidence_verification_full_page", 2048)),
     )
     difficulty_agent = DifficultyAssessmentAgent(
         llm_client=llm_client,
@@ -180,7 +182,7 @@ def main() -> None:
     pipeline = SleuthPipeline(
         retriever=retriever,
         clue_agent=clue_agent,
-        page_screening_agent=page_screening_agent,
+        evidence_verification_agent=evidence_verification_agent,
         difficulty_agent=difficulty_agent,
         core_decision_agent=core_decision_agent,
         render_dpi=args.render_dpi,

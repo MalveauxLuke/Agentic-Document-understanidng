@@ -91,21 +91,36 @@ class CoreDecisionAgent:
 
     def _build_prompt(self, question: str, evidence_context: EvidenceContext, difficulty_output: DifficultyOutput) -> str:
         if evidence_context.retained_image_paths:
-            page_lines = "\n".join(
-                f"- Page Number {display_page_number(page_index)}"
+            visual_rows = evidence_context.retained_visual_evidence or [
+                {
+                    "page_index": page_index,
+                    "display_page_number": display_page_number(page_index),
+                    "crop_region": "full_page",
+                    "crop_location": "full original page",
+                    "is_crop": False,
+                }
                 for page_index in evidence_context.retained_page_indices
+            ]
+            page_lines = "\n".join(
+                "- Page Number {page} | {kind} | crop_region={region} | location={location}".format(
+                    page=row.get("display_page_number") or display_page_number(int(row.get("page_index", 0))),
+                    kind="crop image" if row.get("is_crop") else "full page image",
+                    region=row.get("crop_region", "full_page"),
+                    location=row.get("crop_location", ""),
+                )
+                for row in visual_rows
             )
             visual_evidence_section = (
-                "The following page images are provided as visual evidence:\n"
+                "The following verified images are provided as visual evidence:\n"
                 f"{page_lines}\n\n"
-                "The actual images will be passed to the multimodal model separately."
+                "The actual images will be passed to the multimodal model separately in this order."
             )
             return build_core_decision_visual_prompt(
                 question=question,
                 instruction_set=difficulty_output.instruction_set,
                 evidence_summary=evidence_context.evidence_summary,
                 visual_evidence_section=visual_evidence_section,
-                num_pages=len(evidence_context.clue_outputs),
+                num_pages=len(evidence_context.retained_image_paths),
                 agent_prompt_text=self.visual_agent_prompt_text,
                 sol_instruction_text=self.sol_instruction_text,
             )

@@ -150,6 +150,8 @@ def main() -> None:
         "paper_comparable_scoring": answer_extractor.paper_comparable,
         "difficulty_model_switching_enabled": difficulty_model_switching_enabled,
         "core_decision_thinking_max_tokens": int(max_tokens.get("core_decision_thinking", 4096)),
+        "evidence_verification_crop_max_tokens": int(max_tokens.get("evidence_verification_crop", 2048)),
+        "evidence_verification_full_page_max_tokens": int(max_tokens.get("evidence_verification_full_page", 2048)),
     }
 
     evaluator = MMLongBenchEvaluator(
@@ -166,7 +168,8 @@ def main() -> None:
         sol_instruction_text=sol_instruction_text,
         max_tokens={
             "clue_discovery": int(max_tokens.get("clue_discovery", 3072)),
-            "page_screening": int(max_tokens.get("page_screening", 512)),
+            "evidence_verification_crop": int(max_tokens.get("evidence_verification_crop", 2048)),
+            "evidence_verification_full_page": int(max_tokens.get("evidence_verification_full_page", 2048)),
             "difficulty_assessment": int(max_tokens.get("difficulty_assessment", 512)),
             "core_decision": int(max_tokens.get("core_decision", 512)),
             "core_decision_thinking": int(max_tokens.get("core_decision_thinking", 4096)),

@@ -7,6 +7,8 @@ constraints.
 
 from __future__ import annotations
 
+import json
+
 
 def display_page_number(page_index: int) -> int:
     return page_index + 1
@@ -21,6 +23,10 @@ def _fill_placeholders(text: str, values: dict[str, str]) -> str:
     for key, value in values.items():
         rendered = rendered.replace("{" + key + "}", value)
     return rendered
+
+
+def _json_string_fragment(value: object) -> str:
+    return json.dumps("" if value is None else str(value))[1:-1]
 
 
 def _compose_prompt(agent_prompt_text: str, sol_instruction_text: str | None = None) -> str:
@@ -63,6 +69,72 @@ def build_page_screening_prompt(
             "page_number": page_number,
             "page num": page_number,
             "page number": page_number,
+        },
+    )
+    return _compose_prompt(prompt, sol_instruction_text)
+
+
+def build_evidence_verification_crop_prompt(
+    question: str,
+    page_index: int,
+    crop_hint: str,
+    crop_location: str,
+    evidence_type: str,
+    content: str,
+    location: str,
+    relevance: str,
+    confidence: str,
+    agent_prompt_text: str,
+    sol_instruction_text: str | None = None,
+) -> str:
+    page_number = str(display_page_number(page_index))
+    prompt = _fill_placeholders(
+        agent_prompt_text,
+        {
+            "question": question,
+            "page_num": page_number,
+            "page_number": page_number,
+            "crop_hint": crop_hint,
+            "crop_location": crop_location,
+            "evidence_type": _json_string_fragment(evidence_type),
+            "content": _json_string_fragment(content),
+            "location": _json_string_fragment(location),
+            "relevance": _json_string_fragment(relevance),
+            "confidence": _json_string_fragment(confidence),
+        },
+    )
+    return _compose_prompt(prompt, sol_instruction_text)
+
+
+def build_evidence_verification_full_page_prompt(
+    question: str,
+    page_index: int,
+    crop_hint: str,
+    crop_problem: str | None,
+    crop_verifier_output: str,
+    evidence_type: str,
+    content: str,
+    location: str,
+    relevance: str,
+    confidence: str,
+    agent_prompt_text: str,
+    sol_instruction_text: str | None = None,
+) -> str:
+    page_number = str(display_page_number(page_index))
+    prompt = _fill_placeholders(
+        agent_prompt_text,
+        {
+            "question": question,
+            "page_num": page_number,
+            "page_number": page_number,
+            "crop_hint": crop_hint,
+            "crop_problem": _json_string_fragment(crop_problem or ""),
+            "crop_verifier_output": crop_verifier_output,
+            "evidence_type": _json_string_fragment(evidence_type),
+            "content": _json_string_fragment(content),
+            "location": _json_string_fragment(location),
+            "relevance": _json_string_fragment(relevance),
+            "confidence": _json_string_fragment(confidence),
         },
     )
     return _compose_prompt(prompt, sol_instruction_text)

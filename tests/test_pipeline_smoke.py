@@ -5,7 +5,7 @@ import fitz
 from sleuth.agents.clue_discovery import ClueDiscoveryAgent
 from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
-from sleuth.agents.page_screening import PageScreeningAgent
+from sleuth.agents.evidence_verification import EvidenceVerificationAgent
 from sleuth.instructions.prompt_loader import get_prompt_section, load_agent_prompt_markdown
 from sleuth.llm.mock_client import MockClient
 from sleuth.pipeline.sleuth_pipeline import SleuthPipeline
@@ -36,9 +36,10 @@ def test_mock_pipeline_smoke(tmp_path):
             llm_client,
             get_prompt_section(prompt_markdown, "clue_discovery"),
         ),
-        page_screening_agent=PageScreeningAgent(
+        evidence_verification_agent=EvidenceVerificationAgent(
             llm_client,
-            get_prompt_section(prompt_markdown, "page_screening"),
+            get_prompt_section(prompt_markdown, "evidence_verification_crop"),
+            get_prompt_section(prompt_markdown, "evidence_verification_full_page"),
         ),
         difficulty_agent=DifficultyAssessmentAgent(
             llm_client,
@@ -62,7 +63,7 @@ def test_mock_pipeline_smoke(tmp_path):
     assert result.final_answer.answer
     assert (out_dir / "pages" / "page_0001.png").exists()
     assert (out_dir / "agents" / "clue_page_0000.json").exists()
-    assert (out_dir / "agents" / "screen_page_0000.json").exists()
+    assert (out_dir / "agents" / "verify_page_0000.json").exists()
     assert (out_dir / "final" / "retrieved_pages.json").exists()
     assert (out_dir / "final" / "evidence_context.json").exists()
     assert (out_dir / "final" / "evidence_summary.txt").exists()

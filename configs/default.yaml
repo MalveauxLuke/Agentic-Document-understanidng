@@ -7,6 +7,8 @@ model:
   max_new_tokens:
     clue_discovery: 3072
     page_screening: 512
+    evidence_verification_crop: 2048
+    evidence_verification_full_page: 2048
     difficulty_assessment: 512
     core_decision: 512
     core_decision_thinking: 4096
@@ -20,7 +22,7 @@ pipeline:
   mode: mock
   save_intermediates: true
   render_dpi: 144
-  region_refinement: fallback
+  region_refinement: none
   difficulty_model_switching_enabled: true
 
 evaluation:

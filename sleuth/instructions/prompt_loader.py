@@ -15,6 +15,15 @@ SECTION_NAMES = {
         ("PAGE SCREENING AGENT PROMPT",),
         ("PAGE SCREENING AGENT",),
     ),
+    "evidence_verification_crop": (
+        ("CROP VERIFIER PROMPT",),
+        ("EVIDENCE VERIFICATION CROP",),
+    ),
+    "evidence_verification_full_page": (
+        ("FULL PAGE FALLBACK VERIFIER PROMPT",),
+        ("FULL-PAGE FALLBACK VERIFIER PROMPT",),
+        ("FULL PAGE EVIDENCE VERIFICATION",),
+    ),
     "difficulty_assessment": (
         ("DIFFICULTY ASSESSMENT AGENT PROMPT",),
         ("DIFFICULTY ASSESSMENT AGENT",),
