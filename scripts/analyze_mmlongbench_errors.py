@@ -73,23 +73,6 @@ def _print_clue_summary(predictions: list[dict[str, Any]]) -> None:
     print(f"clue_non_gold_evidence_cases: {non_gold}/{len(rows)} ({non_gold / len(rows):.4f})")
 
 
-def _print_verification_summary(predictions: list[dict[str, Any]]) -> None:
-    rows = [item for item in predictions if item.get("verification_retained_gold") is not None]
-    if not rows:
-        return
-    hit = sum(1 for item in rows if item.get("verification_retained_gold"))
-    rejected = sum(int(item.get("verification_rejected_count") or 0) for item in predictions)
-    uncertain = sum(int(item.get("verification_uncertain_count") or 0) for item in predictions)
-    fallback = sum(int(item.get("verification_full_page_fallback_count") or 0) for item in predictions)
-    print()
-    print("Evidence Verification")
-    print("=====================")
-    print(f"verification_retained_gold: {hit}/{len(rows)} ({hit / len(rows):.4f})")
-    print(f"verification_rejected_count: {rejected}")
-    print(f"verification_uncertain_count: {uncertain}")
-    print(f"verification_full_page_fallback_count: {fallback}")
-
-
 def _print_examples(predictions: list[dict[str, Any]], label: str | None, limit: int, show_clues: bool) -> None:
     wrong = [item for item in predictions if float(item.get("score", 0.0)) == 0.0]
     if label:
@@ -133,15 +116,6 @@ def _print_examples(predictions: list[dict[str, Any]], label: str | None, limit:
             f"Clue non-gold pages: {item.get('clue_non_gold_pages_with_evidence')} "
             f"display={item.get('clue_non_gold_display_page_numbers_with_evidence')}"
         )
-        print(
-            f"Verification accepted pages: {item.get('verification_accepted_page_indices')} "
-            f"display={item.get('verification_accepted_display_page_numbers')}"
-        )
-        print(
-            f"Verification counts: rejected={item.get('verification_rejected_count')} "
-            f"uncertain={item.get('verification_uncertain_count')} "
-            f"fallback={item.get('verification_full_page_fallback_count')}"
-        )
 
         if not show_clues:
             continue
@@ -156,20 +130,7 @@ def _print_examples(predictions: list[dict[str, Any]], label: str | None, limit:
             if clue.get("key_insights"):
                 print(f"    insights: {_short(clue.get('key_insights'), 240)}")
             for evidence in evidence_items[:3]:
-                print(
-                    f"    evidence: {_short(evidence.get('content'), 240)} "
-                    f"crop={evidence.get('crop_region')}"
-                )
-        for verification in item.get("verification_output", [])[:8]:
-            faithful = verification.get("faithful_evidence") or {}
-            print(
-                f"  Verify p={verification.get('page_index')} item={verification.get('source_evidence_item_index')} "
-                f"stage={verification.get('verification_stage')} status={verification.get('verification_status')} "
-                f"needs_full={verification.get('needs_full_page')} fallback={verification.get('used_full_page_fallback')}"
-            )
-            print(f"    crop: {verification.get('crop_hint')} {verification.get('crop_location')}")
-            if faithful:
-                print(f"    faithful: {_short(faithful.get('content'), 240)}")
+                print(f"    evidence: {_short(evidence.get('content'), 240)}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -187,7 +148,6 @@ def main() -> None:
     _print_failure_summary(predictions)
     _print_retrieval_summary(predictions)
     _print_clue_summary(predictions)
-    _print_verification_summary(predictions)
     _print_examples(predictions, args.label, args.limit, args.show_clues)
 
 

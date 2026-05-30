@@ -15,19 +15,6 @@ from sleuth.utils.json_utils import extract_json_from_text
 
 
 REGION_REFINEMENT_DISABLED = {"", "none", "off", "disabled", "false", "0"}
-ALLOWED_CROP_REGIONS = {
-    "upper_left",
-    "upper_right",
-    "lower_left",
-    "lower_right",
-    "upper_half",
-    "lower_half",
-    "left_half",
-    "right_half",
-    "full_page",
-    "uncertain",
-    "not_applicable",
-}
 
 
 def _model_dump(obj: Any) -> Any:
@@ -47,15 +34,6 @@ def _value(data: dict, *keys: str):
         if key in data:
             return data[key]
     return None
-
-
-def _normalize_crop_region(value: Any, evidence_type: str = "") -> str:
-    region = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if region in ALLOWED_CROP_REGIONS:
-        return region
-    if evidence_type.strip().lower() == "text":
-        return "not_applicable"
-    return "not_applicable"
 
 
 def _normalize_clue_data(data: dict, page_index: int) -> dict:
@@ -81,10 +59,6 @@ def _normalize_clue_data(data: dict, page_index: int) -> dict:
                 "location": _value(item, "location") or "",
                 "relevance": _value(item, "relevance") or "",
                 "confidence": _value(item, "confidence") or "",
-                "crop_region": _normalize_crop_region(
-                    _value(item, "crop_region", "crop region"),
-                    str(_value(item, "evidence_type", "evidence type") or ""),
-                ),
             }
         )
     normalized["evidence_items"] = normalized_items
@@ -138,10 +112,6 @@ def _salvage_evidence_items(raw_output: str, page_index: int) -> list[dict]:
                 "relevance": _extract_string_field(block, "relevance")
                 or "Recovered from invalid or truncated Clue Discovery JSON.",
                 "confidence": _extract_string_field(block, "confidence") or "low",
-                "crop_region": _normalize_crop_region(
-                    _extract_string_field(block, "crop_region", "crop region"),
-                    _extract_string_field(block, "evidence_type", "evidence type") or "raw",
-                ),
             }
         )
 
@@ -159,7 +129,6 @@ def _salvage_evidence_items(raw_output: str, page_index: int) -> list[dict]:
                     "location": "Salvaged from unparsed clue output.",
                     "relevance": "Recovered from invalid or truncated Clue Discovery JSON.",
                     "confidence": "low",
-                    "crop_region": "not_applicable",
                 }
             )
     return items

@@ -5,7 +5,7 @@ from pathlib import Path
 from sleuth.agents.clue_discovery import ClueDiscoveryAgent
 from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
-from sleuth.agents.evidence_verification import EvidenceVerificationAgent
+from sleuth.agents.page_screening import PageScreeningAgent
 from sleuth.documents.page_store import build_document_pages
 from sleuth.pipeline.context_builder import build_evidence_context
 from sleuth.retrieval.base import BaseRetriever
@@ -19,14 +19,14 @@ class SleuthPipeline:
         self,
         retriever: BaseRetriever,
         clue_agent: ClueDiscoveryAgent,
-        evidence_verification_agent: EvidenceVerificationAgent,
+        page_screening_agent: PageScreeningAgent,
         difficulty_agent: DifficultyAssessmentAgent,
         core_decision_agent: CoreDecisionAgent,
         render_dpi: int = 144,
     ) -> None:
         self.retriever = retriever
         self.clue_agent = clue_agent
-        self.evidence_verification_agent = evidence_verification_agent
+        self.page_screening_agent = page_screening_agent
         self.difficulty_agent = difficulty_agent
         self.core_decision_agent = core_decision_agent
         self.render_dpi = render_dpi
@@ -45,7 +45,7 @@ class SleuthPipeline:
         save_json(final_dir / "retrieved_pages.json", retrieved_pages)
 
         clue_outputs = []
-        verification_outputs = []
+        page_screening_outputs = []
         for retrieved_page in retrieved_pages:
             if retrieved_page.page_index not in page_lookup:
                 continue
@@ -54,17 +54,16 @@ class SleuthPipeline:
             clue_outputs.append(clue_output)
             save_json(agents_dir / f"clue_page_{page.page_index:04d}.json", clue_output)
 
-            page_verification_outputs = self.evidence_verification_agent.run(question, page, clue_output)
-            verification_outputs.extend(page_verification_outputs)
-            save_json(agents_dir / f"verify_page_{page.page_index:04d}.json", page_verification_outputs)
+            screening_output = self.page_screening_agent.run(question, page)
+            page_screening_outputs.append(screening_output)
+            save_json(agents_dir / f"screen_page_{page.page_index:04d}.json", screening_output)
 
         evidence_context = build_evidence_context(
             question=question,
             pages=pages,
             retrieved_pages=retrieved_pages,
             clue_outputs=clue_outputs,
-            page_screening_outputs=[],
-            verification_outputs=verification_outputs,
+            page_screening_outputs=page_screening_outputs,
         )
         save_json(final_dir / "evidence_context.json", evidence_context)
         write_text(final_dir / "evidence_summary.txt", evidence_context.evidence_summary)

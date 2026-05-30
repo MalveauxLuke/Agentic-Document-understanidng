@@ -2,60 +2,47 @@ F. The Prompt design of SLEUTH
 
 Clue Discovery Agent
 
-You are a Detective, an expert evidence collector for document question answering. Examine the PDF page image and extract all evidence that might help answer the question.
+You are a Detective, an expert evidence collector for document question answering. Your task is to carefully examine the given PDF page and extract ALL evidence that might be relevant to answering the question.
 
 Question: {question}
 
-Page Number: {page_num}
+Page Information:
+• Page Number: {page num}
 
-Evidence Rules:
-- Extract atomic facts before conclusions.
-- Preserve partial evidence even if this page alone does not fully answer the question.
-- For comparisons, counts, rankings, max/min, filtering, or calculations, list candidate items and visible values/attributes first.
-- For diagrams, arrows, paths, hierarchy, or graph structure, list each relevant relation with label, source, target, and whether it satisfies the question condition.
-- Mark related non-target examples as background/distractor evidence.
-- Do not infer unreadable values, labels, or relationships. Mark uncertain details explicitly.
-- Use only what is visible on this page.
+Your Task:
+1. Carefully examine the page image!
+2. Identify ALL facts, data points, and information that could help answer the question.
+3. Extract specific evidence with:
+• Exact quotes or data values
+• Context where information appears
+• Explanation of why it’s relevant
 
-Visual Region System:
-Use crop_region only for visual evidence: charts, tables, figures, maps, diagrams, images, layouts, or text labels inside visual elements.
-For plain paragraph text evidence, use crop_region: "not_applicable".
-
-Allowed crop_region values:
-- upper_left
-- upper_right
-- lower_left
-- lower_right
-- upper_half
-- lower_half
-- left_half
-- right_half
-- full_page
-- uncertain
-- not_applicable
-
-Choose the smallest visual region that preserves all labels, values, headers, legends, arrows, and context needed to verify the evidence.
-Use full_page when evidence depends on multiple distant regions or page-wide layout.
-Use uncertain only when visual evidence is relevant but cannot be confidently localized.
-
-Return valid JSON only:
+Output Format: Provide your analysis in the following JSON format:
 
 {
-  "page number": {page_num},
+  "page number": {page num},
   "has relevant evidence": true/false,
   "evidence items": [
     {
       "evidence type": "text/chart/table/figure",
-      "content": "Atomic evidence from the page. For comparisons/counts, include candidate-value lists. For diagrams, include relation/source/target/condition records.",
-      "location": "Brief visible location on the page",
-      "crop_region": "upper_left/upper_right/lower_left/lower_right/upper_half/lower_half/left_half/right_half/full_page/uncertain/not_applicable",
-      "relevance": "direct/partial/background/distractor/irrelevant, with a short reason",
+      "content": "The actual evidence (quote, data, or description)",
+      "location": "Description of where this appears on the page",
+      "relevance": "Explanation of why this is relevant...",
       "confidence": "high/medium/low"
     }
   ],
-  "page summary": "Brief page-level summary. Do not replace atomic evidence with broad conclusions.",
-  "key insights": "Question-relevant insight based only on extracted evidence; mention uncertainty if needed."
+  "page summary": "Overall summary of findings from this page",
+  "key insights": "Any important insights or patterns noticed"
 }
+
+Important Guidelines:
+• Be thorough - collect ALL potentially relevant evidence.
+• Include exact numbers, percentages, and specific facts.
+• Note relationships between data points.
+• If the page is not relevant, explain why!
+• Please think carefully and avoid generating content that does not conform to reality.
+
+Now examine the page and provide your evidence collection in valid JSON format.
 
 Page Screening Agent
 
@@ -90,130 +77,6 @@ Relevance: [Completely Relevant/ Relevant/ Irrelevant]
 Reasoning: [Brief explanation of your judgment, 1-2 sentences]
 
 Now, analyze the provided page image and respond following the exact format above.
-
-Crop Verifier Prompt
-
-You are an Evidence Faithfulness Verifier.
-
-Do NOT answer the question. Verify whether the proposed evidence is faithfully supported by the provided crop image.
-
-Question:
-{question}
-
-Page Number: {page_num}
-Crop Hint: {crop_hint}
-Crop Location: {crop_location}
-
-Proposed Evidence:
-{
-  "evidence type": "{evidence_type}",
-  "content": "{content}",
-  "location": "{location}",
-  "relevance": "{relevance}",
-  "confidence": "{confidence}"
-}
-
-Instructions:
-1. Inspect the crop first. Do not trust the proposed evidence yet.
-2. If the crop cuts off needed labels, values, axes, legends, table headers, arrows, node labels, or the referenced visual/text, set "needs_full_page": true and do not guess.
-3. If the crop is enough, set "needs_full_page": false.
-4. Extract only visible facts relevant to the question.
-5. Compare those visible facts to the proposed evidence.
-6. Preserve faithful evidence, rewrite partially wrong evidence, reject unsupported evidence, or mark uncertain.
-7. Use only the image. Do not use outside knowledge. Do not infer unreadable details.
-
-Rules:
-- For comparisons/counts/max/min/calculations, list visible candidates and values.
-- For charts/tables/maps, pair visible labels with visible values.
-- For diagrams/arrows/hierarchy, list visible relations with label, source, and target.
-- For shape/object questions, list only objects in the target crop.
-- Mark related non-answer examples as background/distractor.
-- Trust the image over the proposed evidence.
-
-Return valid JSON only:
-{
-  "page_number": {page_num},
-  "verification_stage": "crop",
-  "crop_hint": "{crop_hint}",
-  "verification_status": "faithful/corrected/rejected/uncertain",
-  "needs_full_page": true/false,
-  "crop_problem": "reason full page is needed, or null",
-  "visible_evidence": "facts read from the crop before comparison",
-  "comparison": "agreement or conflict with proposed evidence",
-  "faithful_evidence": {
-    "evidence type": "text/chart/table/figure",
-    "content": "faithful evidence grounded in the crop; do not answer the question",
-    "location": "verified crop/page location",
-    "relevance": "direct/partial/background/distractor/irrelevant",
-    "confidence": "high/medium/low"
-  },
-  "notes": [],
-  "uncertainties": []
-}
-
-Full Page Fallback Verifier Prompt
-
-You are a Full-Page Evidence Faithfulness Verifier.
-
-A crop verifier said the crop was insufficient or uncertain. You now have the full original PDF page image.
-
-Do NOT answer the question. Verify whether the proposed evidence is faithfully supported by the full page.
-
-Question:
-{question}
-
-Page Number: {page_num}
-Original Crop Hint: {crop_hint}
-Crop Problem: {crop_problem}
-
-Proposed Evidence:
-{
-  "evidence type": "{evidence_type}",
-  "content": "{content}",
-  "location": "{location}",
-  "relevance": "{relevance}",
-  "confidence": "{confidence}"
-}
-
-Crop Verifier Output:
-{crop_verifier_output}
-
-Instructions:
-1. Inspect the full page first. Do not trust the proposed evidence or crop verifier yet.
-2. Extract only visible facts relevant to the question.
-3. Compare those visible facts to the proposed evidence and crop verifier output.
-4. Preserve faithful evidence, rewrite partially wrong evidence, reject unsupported evidence, or mark uncertain.
-5. Use only the image. Do not use outside knowledge. Do not infer unreadable details.
-6. Do not request more context.
-
-Rules:
-- For comparisons/counts/max/min/calculations, list visible candidates and values.
-- For charts/tables/maps, pair visible labels with visible values.
-- For diagrams/arrows/hierarchy, list visible relations with label, source, and target.
-- For shape/object questions, list only objects in the target region.
-- Mark related non-answer examples as background/distractor.
-- Trust the full page over the proposed evidence.
-
-Return valid JSON only:
-{
-  "page_number": {page_num},
-  "verification_stage": "full_page",
-  "crop_hint": "{crop_hint}",
-  "verification_status": "faithful/corrected/rejected/uncertain",
-  "needs_full_page": false,
-  "crop_problem": "{crop_problem}",
-  "visible_evidence": "facts read from the full page before comparison",
-  "comparison": "agreement or conflict with proposed evidence/crop verifier",
-  "faithful_evidence": {
-    "evidence type": "text/chart/table/figure",
-    "content": "faithful evidence grounded in the full page; do not answer the question",
-    "location": "verified full-page location",
-    "relevance": "direct/partial/background/distractor/irrelevant",
-    "confidence": "high/medium/low"
-  },
-  "notes": [],
-  "uncertainties": []
-}
 
 Difficulty Assessment Agent
 

@@ -41,30 +41,6 @@ class MockClient(LLMClient):
         if "Has Chart:" in prompt and "Relevance:" in prompt and "Reasoning:" in prompt:
             return "Has Chart: No\nRelevance: None\nReasoning: Mock screening found no visual element."
 
-        if '"verification_status"' in prompt and '"faithful_evidence"' in prompt:
-            stage = "full_page" if '"verification_stage": "full_page"' in prompt else "crop"
-            return json.dumps(
-                {
-                    "page_number": page_index,
-                    "verification_stage": stage,
-                    "crop_hint": "not_applicable",
-                    "verification_status": "faithful",
-                    "needs_full_page": False,
-                    "crop_problem": None,
-                    "visible_evidence": "Mock visible evidence from the image.",
-                    "comparison": "The proposed evidence is supported by the mock image.",
-                    "faithful_evidence": {
-                        "evidence type": "text",
-                        "content": "Mock verified evidence extracted from the page.",
-                        "location": "mock verified location",
-                        "relevance": "direct",
-                        "confidence": "low",
-                    },
-                    "notes": [],
-                    "uncertainties": [],
-                }
-            )
-
         if (
             '"difficulty_level"' in prompt
             and '"instruction_set"' in prompt
@@ -106,7 +82,6 @@ class MockClient(LLMClient):
                             "evidence type": "text",
                             "content": "Mock evidence extracted from the page.",
                             "location": "mock page text",
-                            "crop_region": "not_applicable",
                             "relevance": "Potentially relevant to the question.",
                             "confidence": "low",
                         }

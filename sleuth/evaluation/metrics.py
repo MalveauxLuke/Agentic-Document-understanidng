@@ -25,13 +25,8 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     clue_hits = sum(1 for item in clue_rows if item.get("clue_hit_gold"))
     clue_any_rows = [item for item in predictions if item.get("clue_has_any_evidence") is not None]
     clue_any_hits = sum(1 for item in clue_any_rows if item.get("clue_has_any_evidence"))
-    verification_rows = [item for item in predictions if item.get("verification_retained_gold") is not None]
-    verification_hits = sum(1 for item in verification_rows if item.get("verification_retained_gold"))
-    verification_rejected_count = sum(int(item.get("verification_rejected_count") or 0) for item in predictions)
-    verification_uncertain_count = sum(int(item.get("verification_uncertain_count") or 0) for item in predictions)
-    verification_full_page_fallback_count = sum(
-        int(item.get("verification_full_page_fallback_count") or 0) for item in predictions
-    )
+    screening_rows = [item for item in predictions if item.get("screening_retained_gold") is not None]
+    screening_hits = sum(1 for item in screening_rows if item.get("screening_retained_gold"))
     core_decision_rows = [item for item in predictions if item.get("core_decision_mode")]
     thinking_core_decisions = sum(1 for item in core_decision_rows if item.get("core_decision_mode") == "thinking")
     changed = sum(1 for item in predictions if item.get("raw_model_answer") != item.get("extracted_answer"))
@@ -63,17 +58,9 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "clue_has_any_evidence_count": clue_any_hits,
         "clue_has_any_evidence_total": len(clue_any_rows),
         "clue_has_any_evidence_rate": clue_any_hits / len(clue_any_rows) if clue_any_rows else 0.0,
-        "screening_retained_gold_count": 0,
-        "screening_retained_gold_total": 0,
-        "screening_retained_gold_rate": 0.0,
-        "verification_retained_gold_count": verification_hits,
-        "verification_retained_gold_total": len(verification_rows),
-        "verification_retained_gold_rate": (
-            verification_hits / len(verification_rows) if verification_rows else 0.0
-        ),
-        "verification_rejected_count": verification_rejected_count,
-        "verification_uncertain_count": verification_uncertain_count,
-        "verification_full_page_fallback_count": verification_full_page_fallback_count,
+        "screening_retained_gold_count": screening_hits,
+        "screening_retained_gold_total": len(screening_rows),
+        "screening_retained_gold_rate": screening_hits / len(screening_rows) if screening_rows else 0.0,
         "core_decision_thinking_count": thinking_core_decisions,
         "core_decision_thinking_total": len(core_decision_rows),
         "core_decision_thinking_rate": (

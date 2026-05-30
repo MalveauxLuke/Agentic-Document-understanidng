@@ -22,7 +22,6 @@ class EvidenceItem(BaseModel):
     location: str
     relevance: str
     confidence: str
-    crop_region: str = "not_applicable"
 
 
 class ClueDiscoveryOutput(BaseModel):
@@ -45,27 +44,6 @@ class PageScreeningOutput(BaseModel):
     prompt_used: str | None = None
 
 
-class EvidenceVerificationOutput(BaseModel):
-    page_index: int
-    source_evidence_item_index: int
-    verification_stage: str
-    crop_hint: str
-    crop_location: str
-    verification_status: str
-    needs_full_page: bool
-    crop_problem: str | None = None
-    visible_evidence: str = ""
-    comparison: str = ""
-    faithful_evidence: EvidenceItem | None = None
-    notes: list[str] = []
-    uncertainties: list[str] = []
-    input_image_path: str | None = None
-    crop_bbox: list[int] | None = None
-    used_full_page_fallback: bool = False
-    raw_output: str | None = None
-    prompt_used: str | None = None
-
-
 class DifficultyOutput(BaseModel):
     difficulty_level: int
     instruction_set: str
@@ -78,10 +56,8 @@ class EvidenceContext(BaseModel):
     retrieved_pages: list[RetrievedPage]
     clue_outputs: list[ClueDiscoveryOutput]
     page_screening_outputs: list[PageScreeningOutput]
-    verification_outputs: list[EvidenceVerificationOutput] = []
     retained_page_indices: list[int]
     retained_image_paths: list[str]
-    retained_visual_evidence: list[dict] = []
     evidence_summary: str
 
 
