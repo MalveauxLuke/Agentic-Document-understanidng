@@ -29,15 +29,21 @@ class AnswerExtractor(ABC):
         raise NotImplementedError
 
 
+def strip_thinking_blocks(text: str) -> str:
+    stripped = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    stripped = re.sub(r"</?think>", "", stripped, flags=re.IGNORECASE)
+    return stripped.strip()
+
+
 def _answer_from_json(text: str) -> str | None:
     data = extract_json_from_text(text)
     if isinstance(data, dict) and "answer" in data:
-        return str(data["answer"]).strip()
+        return strip_thinking_blocks(str(data["answer"])).strip()
     return None
 
 
 def _clean_candidate(text: str) -> str:
-    candidate = text.strip()
+    candidate = strip_thinking_blocks(text).strip()
     candidate = re.sub(r"^```(?:\w+)?\s*", "", candidate)
     candidate = re.sub(r"\s*```$", "", candidate).strip()
     if candidate.lower().startswith("answer:"):
@@ -223,7 +229,9 @@ def has_openai_compatible_answer_extractor_env() -> bool:
 def build_answer_extractor(kind: str, mode: str = "sol") -> AnswerExtractor:
     selected = kind
     if kind == "auto":
-        selected = "openai_compatible" if mode != "mock" and has_openai_compatible_answer_extractor_env() else "heuristic"
+        selected = "openai_compatible" if mode == "sol" or has_openai_compatible_answer_extractor_env() else "heuristic"
+    if mode == "sol" and selected != "openai_compatible":
+        raise ValueError("SOL mode requires ANSWER_EXTRACTOR=openai_compatible or auto with API credentials.")
     if selected == "none":
         return NoneAnswerExtractor()
     if selected == "heuristic":
@@ -237,17 +245,17 @@ def build_answer_extractor(kind: str, mode: str = "sol") -> AnswerExtractor:
         or os.environ.get("OPENAI_API_KEY")
     )
     if not api_key:
+        if mode == "sol":
+            raise EnvironmentError(
+                "SOL mode requires ANSWER_EXTRACTOR_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY "
+                "for paper-comparable answer extraction."
+            )
         return HeuristicAnswerExtractor()
     base_url = (
         os.environ.get("ANSWER_EXTRACTOR_BASE_URL")
         or os.environ.get("DEEPSEEK_BASE_URL")
         or os.environ.get("OPENAI_BASE_URL")
-        or "https://api.deepseek.com"
+        or "https://api.openai.com/v1"
     )
-    model = (
-        os.environ.get("ANSWER_EXTRACTOR_MODEL")
-        or os.environ.get("DEEPSEEK_MODEL")
-        or os.environ.get("OPENAI_MODEL")
-        or "deepseek-chat"
-    )
+    model = os.environ.get("ANSWER_EXTRACTOR_MODEL") or "gpt-4.1-mini"
     return OpenAICompatibleAnswerExtractor(api_key=api_key, base_url=base_url, model=model)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=sleuth-mmlb-debug
 #SBATCH --account=grp_vgupt140
-#SBATCH --partition=htc
-#SBATCH --qos=debug
+#SBATCH --partition=public
+#SBATCH --qos=public
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

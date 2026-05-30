@@ -66,6 +66,9 @@ class FinalAnswer(BaseModel):
     evidence_references: list[dict]
     raw_output: str | None = None
     prompt_used: str | None = None
+    core_decision_model: str | None = None
+    core_decision_mode: str | None = None
+    difficulty_model_switching_used: bool = False
 
 
 class PipelineResult(BaseModel):

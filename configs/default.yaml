@@ -1,5 +1,6 @@
 model:
   name_or_path: Qwen/Qwen3-VL-8B-Instruct
+  thinking_name_or_path: Qwen/Qwen3-VL-8B-Thinking
   temperature: 0.1
   device: cuda
   dtype: bfloat16
@@ -8,6 +9,7 @@ model:
     page_screening: 512
     difficulty_assessment: 512
     core_decision: 512
+    core_decision_thinking: 4096
 
 retriever:
   type: colpali
@@ -19,6 +21,10 @@ pipeline:
   save_intermediates: true
   render_dpi: 144
   region_refinement: fallback
+  difficulty_model_switching_enabled: true
+
+evaluation:
+  evidence_page_base: auto
 
 paths:
   agent_prompts_md: agent_prompts.md

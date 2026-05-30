@@ -85,6 +85,7 @@ def build_results_summary(output_dir: str | Path, max_examples: int = 5) -> str:
                 f"  clue_has_any_evidence: {metrics.get('clue_has_any_evidence_count', 0)}/{metrics.get('clue_has_any_evidence_total', 0)} ({_format_float(metrics.get('clue_has_any_evidence_rate', 0.0))})",
                 f"  clue_hit_gold: {metrics.get('clue_hit_gold_count', 0)}/{metrics.get('clue_hit_gold_total', 0)} ({_format_float(metrics.get('clue_hit_gold_rate', 0.0))})",
                 f"  screening_retained_gold: {metrics.get('screening_retained_gold_count', 0)}/{metrics.get('screening_retained_gold_total', 0)} ({_format_float(metrics.get('screening_retained_gold_rate', 0.0))})",
+                f"  core_decision_thinking: {metrics.get('core_decision_thinking_count', 0)}/{metrics.get('core_decision_thinking_total', 0)} ({_format_float(metrics.get('core_decision_thinking_rate', 0.0))})",
                 f"  answer_extractor: {metrics.get('answer_extractor', 'unknown')}",
                 f"  paper_comparable_scoring: {metrics.get('paper_comparable_scoring', False)}",
             ]
@@ -113,6 +114,7 @@ def build_results_summary(output_dir: str | Path, max_examples: int = 5) -> str:
                     f"    ground_truth: {item.get('ground_truth_answer')}",
                     f"    model_answer: {item.get('model_answer')}",
                     f"    raw_model_answer: {item.get('raw_model_answer')}",
+                    f"    core_decision_mode: {item.get('core_decision_mode')} difficulty={item.get('difficulty_level')}",
                     f"    retrieved_pages: {item.get('retrieved_page_indices')} display={item.get('retrieved_display_page_numbers')}",
                     f"    gold_pages: {item.get('gold_evidence_pages')} display={item.get('gold_display_page_numbers')}",
                     f"    failure_label: {item.get('failure_label')}",

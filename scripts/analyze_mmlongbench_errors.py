@@ -87,6 +87,12 @@ def _print_examples(predictions: list[dict[str, Any]], label: str | None, limit:
         print(f"GT: {item.get('ground_truth_answer')}")
         print(f"Ans: {item.get('model_answer')}")
         print(f"Raw: {_short(item.get('raw_model_answer'), 300)}")
+        print(
+            f"Difficulty/Core: d={item.get('difficulty_level')} "
+            f"mode={item.get('core_decision_mode')} "
+            f"model={item.get('core_decision_model')} "
+            f"switched={item.get('difficulty_model_switching_used')}"
+        )
         print(f"Retrieved: {item.get('retrieved_page_indices')} display={item.get('retrieved_display_page_numbers')}")
         print(
             f"Gold: {item.get('gold_evidence_pages')} "

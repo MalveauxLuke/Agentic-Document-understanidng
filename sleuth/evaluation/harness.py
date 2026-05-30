@@ -32,7 +32,15 @@ from sleuth.utils.file_utils import ensure_dir, write_text
 from sleuth.utils.json_utils import extract_json_from_text, load_json, save_json
 
 
-PIPELINE_CACHE_VERSION = "paper-faithful-mismatch-recovery-v2"
+PIPELINE_CACHE_VERSION = "paper-faithful-thinking-recovery-v3"
+AGENT_SOURCE_FILES = [
+    "sleuth/agents/clue_discovery.py",
+    "sleuth/agents/page_screening.py",
+    "sleuth/agents/difficulty_assessment.py",
+    "sleuth/agents/core_decision.py",
+    "sleuth/agents/prompts.py",
+    "sleuth/pipeline/context_builder.py",
+]
 
 
 def _model_dump(obj: Any) -> Any:
@@ -60,6 +68,18 @@ def _safe_id(value: str) -> str:
 
 def _short_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def compute_agent_source_fingerprint() -> str:
+    root = Path(__file__).resolve().parents[2]
+    hasher = hashlib.sha256()
+    for relative_path in AGENT_SOURCE_FILES:
+        path = root / relative_path
+        hasher.update(relative_path.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(path.read_bytes())
+        hasher.update(b"\0")
+    return hasher.hexdigest()[:16]
 
 
 def _display_pages(page_indices: list[int]) -> list[int]:
@@ -340,6 +360,7 @@ class MMLongBenchEvaluator:
         retriever: BaseRetriever,
         retriever_name: str,
         llm_client: LLMClient,
+        core_decision_thinking_client: LLMClient | None,
         top_k: int,
         temperature: float,
         render_dpi: int,
@@ -348,6 +369,9 @@ class MMLongBenchEvaluator:
         max_tokens: dict[str, int],
         answer_extractor: AnswerExtractor | None = None,
         region_refinement: str = "fallback",
+        difficulty_model_switching_enabled: bool = False,
+        thinking_model: str | None = None,
+        agent_source_fingerprint: str | None = None,
     ) -> None:
         self.output_dir = ensure_dir(output_dir)
         self.cache_dir = ensure_dir(self.output_dir / "cache")
@@ -355,6 +379,7 @@ class MMLongBenchEvaluator:
         self.retriever = retriever
         self.retriever_name = retriever_name
         self.llm_client = llm_client
+        self.core_decision_thinking_client = core_decision_thinking_client
         self.top_k = top_k
         self.temperature = temperature
         self.render_dpi = render_dpi
@@ -362,6 +387,11 @@ class MMLongBenchEvaluator:
         self.answer_extractor = answer_extractor or HeuristicAnswerExtractor()
         self.pipeline_cache_version = PIPELINE_CACHE_VERSION
         self.region_refinement = region_refinement
+        self.difficulty_model_switching_enabled = difficulty_model_switching_enabled
+        self.thinking_model = thinking_model
+        self.agent_source_fingerprint = agent_source_fingerprint or compute_agent_source_fingerprint()
+        if self.difficulty_model_switching_enabled and self.core_decision_thinking_client is None:
+            raise ValueError("Difficulty model switching is enabled, but no Thinking Core Decision client was provided.")
 
         self.agent_prompt_markdown = load_agent_prompt_markdown(agent_prompts_md)
         save_instruction_copy(self.agent_prompt_markdown, self.output_dir / "agent_prompts_used.md")
@@ -397,6 +427,9 @@ class MMLongBenchEvaluator:
             sol_instruction_text=sol_instruction_text,
             temperature=temperature,
             max_new_tokens=max_tokens.get("core_decision", 512),
+            thinking_llm_client=core_decision_thinking_client,
+            difficulty_model_switching_enabled=difficulty_model_switching_enabled,
+            thinking_max_new_tokens=max_tokens.get("core_decision_thinking", max_tokens.get("core_decision", 512)),
         )
         self.cache_fingerprint = _short_hash(
             json.dumps(
@@ -408,7 +441,15 @@ class MMLongBenchEvaluator:
                     "max_tokens": max_tokens,
                     "pipeline_cache_version": self.pipeline_cache_version,
                     "region_refinement": region_refinement,
+                    "agent_source_fingerprint": self.agent_source_fingerprint,
+                    "difficulty_model_switching_enabled": difficulty_model_switching_enabled,
+                    "thinking_model": thinking_model,
                     "llm": getattr(llm_client, "model_name_or_path", llm_client.__class__.__name__),
+                    "thinking_llm": (
+                        getattr(core_decision_thinking_client, "model_name_or_path", core_decision_thinking_client.__class__.__name__)
+                        if core_decision_thinking_client is not None
+                        else None
+                    ),
                     "prompts": self.agent_prompt_markdown,
                 },
                 sort_keys=True,
@@ -500,6 +541,10 @@ class MMLongBenchEvaluator:
             "final_prompt": final_answer.prompt_used,
             "raw_response": final_answer.raw_output,
             "evidence_references": final_answer.evidence_references,
+            "difficulty_level": difficulty_output.difficulty_level if difficulty_output is not None else None,
+            "core_decision_model": final_answer.core_decision_model,
+            "core_decision_mode": final_answer.core_decision_mode,
+            "difficulty_model_switching_used": final_answer.difficulty_model_switching_used,
             **diagnostics,
             "errors": None,
         }
@@ -513,6 +558,10 @@ class MMLongBenchEvaluator:
         metrics["answer_extractor_base_url"] = getattr(self.answer_extractor, "base_url", None)
         metrics["pipeline_cache_version"] = self.pipeline_cache_version
         metrics["region_refinement"] = self.region_refinement
+        metrics["agent_source_fingerprint"] = self.agent_source_fingerprint
+        metrics["thinking_model"] = self.thinking_model
+        metrics["difficulty_model_switching_enabled"] = self.difficulty_model_switching_enabled
+        metrics["core_decision_thinking_max_tokens"] = self.max_tokens.get("core_decision_thinking")
         metrics["paper_comparable_scoring"] = (
             all(item.get("paper_comparable_scoring") for item in predictions)
             if predictions

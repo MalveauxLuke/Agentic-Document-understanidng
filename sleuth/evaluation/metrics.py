@@ -27,6 +27,8 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     clue_any_hits = sum(1 for item in clue_any_rows if item.get("clue_has_any_evidence"))
     screening_rows = [item for item in predictions if item.get("screening_retained_gold") is not None]
     screening_hits = sum(1 for item in screening_rows if item.get("screening_retained_gold"))
+    core_decision_rows = [item for item in predictions if item.get("core_decision_mode")]
+    thinking_core_decisions = sum(1 for item in core_decision_rows if item.get("core_decision_mode") == "thinking")
     changed = sum(1 for item in predictions if item.get("raw_model_answer") != item.get("extracted_answer"))
     metrics = {
         "total": total,
@@ -59,6 +61,11 @@ def compute_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "screening_retained_gold_count": screening_hits,
         "screening_retained_gold_total": len(screening_rows),
         "screening_retained_gold_rate": screening_hits / len(screening_rows) if screening_rows else 0.0,
+        "core_decision_thinking_count": thinking_core_decisions,
+        "core_decision_thinking_total": len(core_decision_rows),
+        "core_decision_thinking_rate": (
+            thinking_core_decisions / len(core_decision_rows) if core_decision_rows else 0.0
+        ),
     }
     return metrics
 

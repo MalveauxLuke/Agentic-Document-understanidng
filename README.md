@@ -111,10 +111,12 @@ python scripts/run_mmlongbench_eval.py \
 Real SLEUTH evaluation on Sol or another GPU host:
 
 ```bash
+export ANSWER_EXTRACTOR_API_KEY=...
 python scripts/run_mmlongbench_eval.py \
   --data_dir /path/to/MMLongBench-Doc \
   --method sleuth \
   --model Qwen/Qwen3-VL-8B-Instruct \
+  --thinking-model Qwen/Qwen3-VL-8B-Thinking \
   --retriever vidore/colpali-v1.3-hf \
   --top_k 5 \
   --temperature 0.1 \
@@ -124,23 +126,43 @@ python scripts/run_mmlongbench_eval.py \
 ```
 
 Use `--method base` to run the direct retrieved-page baseline. Do not treat mock
-or tiny debug metrics as benchmark results. `--answer-extractor auto` uses an
-OpenAI-compatible extractor when `ANSWER_EXTRACTOR_API_KEY`, `DEEPSEEK_API_KEY`,
-or `OPENAI_API_KEY` is set; otherwise it falls back to a heuristic extractor and
-marks scoring as not paper-comparable.
+or tiny debug metrics as benchmark results. In SOL mode, `--answer-extractor
+auto` requires an OpenAI-compatible extractor key and defaults to
+`gpt-4.1-mini`; set `ANSWER_EXTRACTOR_MODEL` to override it. Mock/local tests may
+still use the heuristic extractor, and those runs are marked as not
+paper-comparable.
 
 On Sol, submit the same evaluation through Slurm with the hardened wrappers:
 
 ```bash
 bash scripts/install_mmlongbench_doc.sh
-LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
-LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
+ANSWER_EXTRACTOR_API_KEY=... LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+ANSWER_EXTRACTOR_API_KEY=... LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
 ```
 
-To force a specific extraction mode through Slurm:
+For paper-comparable Sol runs, use the API extractor and the Difficulty-routed
+Thinking Core Decision path:
 
 ```bash
-ANSWER_EXTRACTOR=heuristic LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+ANSWER_EXTRACTOR_API_KEY=... \
+ANSWER_EXTRACTOR=openai_compatible \
+THINKING_MODEL=Qwen/Qwen3-VL-8B-Thinking \
+LIMIT=75 \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+To sweep render resolution for chart/table/figure sensitivity, keep all other
+settings fixed and vary only `RENDER_DPI`:
+
+```bash
+for dpi in 144 180 200; do
+  ANSWER_EXTRACTOR_API_KEY=... \
+  ANSWER_EXTRACTOR=openai_compatible \
+  RENDER_DPI="$dpi" \
+  LIMIT=75 \
+  OUT_DIR="/scratch/$USER/agenticdocai/runs/mmlongbench_eval_sleuth_dpi_${dpi}" \
+  sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+done
 ```
 
 The wrappers default to `~/mamba-envs/sleuth-static/bin/python`, scratch caches,

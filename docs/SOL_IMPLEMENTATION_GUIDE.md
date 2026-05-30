@@ -271,10 +271,13 @@ HF-native ColPali.
 Before submitting a long run, test the allocation and model loading:
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 sbatch slurm/mmlongbench_eval_sleuth_debug_sol.sbatch
 ```
 
 This uses `htc` + `debug`, one A100, 30 minutes, and `LIMIT=1` by default.
+SOL evaluation requires an OpenAI-compatible answer-extraction key; the default
+extractor model is `gpt-4.1-mini` unless `ANSWER_EXTRACTOR_MODEL` is set.
 
 SLEUTH eval, defaulting to:
 
@@ -283,12 +286,14 @@ SLEUTH eval, defaulting to:
 ```
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
 
 Official MMLongBench-Doc SLEUTH debug run:
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
@@ -296,6 +301,7 @@ sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 For a full run after the debug job works, use `LIMIT=ALL`:
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 LIMIT=ALL \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 ```
@@ -303,6 +309,7 @@ sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
 Official MMLongBench-Doc base debug run:
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_base_sol.sbatch
 ```
@@ -310,9 +317,23 @@ sbatch slurm/mmlongbench_eval_base_sol.sbatch
 Optional category filter:
 
 ```bash
+ANSWER_EXTRACTOR_API_KEY=... \
 CATEGORY=Table \
 LIMIT=3 \
 sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
+To sweep render resolution, keep every other setting fixed and vary only
+`RENDER_DPI`:
+
+```bash
+for dpi in 144 180 200; do
+  ANSWER_EXTRACTOR_API_KEY=... \
+  RENDER_DPI="$dpi" \
+  LIMIT=75 \
+  OUT_DIR="/scratch/$USER/agenticdocai/runs/mmlongbench_eval_sleuth_dpi_${dpi}" \
+  sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+done
 ```
 
 If your environment is under `~/.conda/envs` instead of `~/mamba-envs`:

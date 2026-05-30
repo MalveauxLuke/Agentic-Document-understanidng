@@ -72,6 +72,10 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert prediction["clue_output"]
     assert prediction["page_screening_output"]
     assert prediction["difficulty_output"]
+    assert prediction["difficulty_level"] == 0
+    assert prediction["core_decision_mode"] == "instruct"
+    assert prediction["core_decision_model"] == "MockClient"
+    assert prediction["difficulty_model_switching_used"] is False
     assert prediction["final_prompt"]
 
     metrics = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
@@ -87,9 +91,19 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert "answer_extractor_base_url" in metrics
     assert metrics["pipeline_cache_version"]
     assert metrics["region_refinement"] == "fallback"
+    assert metrics["agent_source_fingerprint"]
+    assert metrics["thinking_model"] is None
+    assert metrics["difficulty_model_switching_enabled"] is False
+    assert metrics["core_decision_thinking_max_tokens"] == 4096
+    assert metrics["core_decision_thinking_count"] == 0
+    assert metrics["core_decision_thinking_total"] == 1
 
     run_config = json.loads((output_dir / "run_config.json").read_text(encoding="utf-8"))
     assert "answer_extractor_model" in run_config
     assert "answer_extractor_base_url" in run_config
     assert run_config["pipeline_cache_version"] == metrics["pipeline_cache_version"]
     assert run_config["region_refinement"] == metrics["region_refinement"]
+    assert run_config["agent_source_fingerprint"] == metrics["agent_source_fingerprint"]
+    assert run_config["thinking_model"] is None
+    assert run_config["difficulty_model_switching_enabled"] is False
+    assert run_config["core_decision_thinking_max_tokens"] == 4096

@@ -77,6 +77,21 @@ def build_llm(llm_name: str, config: dict, max_new_tokens: int):
     raise ValueError(f"Unsupported LLM: {llm_name}")
 
 
+def build_qwen_llm(config: dict, model_name: str, max_new_tokens: int):
+    return QwenVLClient(
+        model_name_or_path=model_name,
+        device=get_nested(config, ["model", "device"], "cuda"),
+        dtype=get_nested(config, ["model", "dtype"], "bfloat16"),
+        max_new_tokens=max_new_tokens,
+    )
+
+
+def _as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def build_retriever(retriever_name: str, config: dict):
     if retriever_name == "dummy":
         return DummyRetriever()
@@ -108,11 +123,24 @@ def main() -> None:
 
     max_tokens = get_nested(config, ["model", "max_new_tokens"], {})
     region_refinement = str(get_nested(config, ["pipeline", "region_refinement"], "fallback"))
+    difficulty_model_switching_enabled = (
+        args.mode != "mock"
+        and llm_name == "qwen-vl"
+        and _as_bool(get_nested(config, ["pipeline", "difficulty_model_switching_enabled"], True))
+    )
+    thinking_model = str(get_nested(config, ["model", "thinking_name_or_path"], "Qwen/Qwen3-VL-8B-Thinking"))
     llm_client = build_llm(
         llm_name,
         config,
         max_new_tokens=int(max_tokens.get("clue_discovery", 3072)),
     )
+    thinking_llm_client = None
+    if difficulty_model_switching_enabled:
+        thinking_llm_client = build_qwen_llm(
+            config,
+            model_name=thinking_model,
+            max_new_tokens=int(max_tokens.get("core_decision_thinking", 4096)),
+        )
     retriever = build_retriever(retriever_name, config)
 
     clue_agent = ClueDiscoveryAgent(
@@ -144,6 +172,9 @@ def main() -> None:
         sol_instruction_text=sol_instruction_text,
         temperature=args.temperature,
         max_new_tokens=int(max_tokens.get("core_decision", 512)),
+        thinking_llm_client=thinking_llm_client,
+        difficulty_model_switching_enabled=difficulty_model_switching_enabled,
+        thinking_max_new_tokens=int(max_tokens.get("core_decision_thinking", 4096)),
     )
 
     pipeline = SleuthPipeline(

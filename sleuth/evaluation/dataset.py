@@ -45,10 +45,15 @@ def _parse_list(value: Any) -> list:
     return [value]
 
 
-def _normalize_evidence_pages(raw_pages: list[int]) -> list[int]:
-    if raw_pages and min(raw_pages) > 0:
-        return [page - 1 for page in raw_pages]
-    return raw_pages
+def _normalize_evidence_pages(raw_pages: list[int], page_base: str, layout: str) -> list[int]:
+    normalized_base = page_base.strip().lower().replace("_", "-")
+    if normalized_base == "auto":
+        normalized_base = "one" if layout in {"official", "bundled_sample"} else "zero"
+    if normalized_base in {"one", "1", "one-based", "1-based"}:
+        return [page - 1 if page > 0 else page for page in raw_pages]
+    if normalized_base in {"zero", "0", "zero-based", "0-based"}:
+        return raw_pages
+    raise ValueError(f"Unsupported evidence page base: {page_base}")
 
 
 def _load_json(path: Path) -> Any:
@@ -98,6 +103,7 @@ def load_mmlongbench_examples(
     data_dir: str | Path,
     limit: int | None = None,
     category: str | None = None,
+    evidence_page_base: str = "auto",
 ) -> list[MMLongBenchExample]:
     rows, documents_root, layout = resolve_dataset_layout(data_dir)
     examples: list[MMLongBenchExample] = []
@@ -106,7 +112,7 @@ def load_mmlongbench_examples(
     for row_index, row in enumerate(rows):
         effective_row_index = int(row.get("row_index", row_index))
         source_evidence_pages = [int(page) for page in _parse_list(row.get("evidence_pages"))]
-        evidence_pages = _normalize_evidence_pages(source_evidence_pages)
+        evidence_pages = _normalize_evidence_pages(source_evidence_pages, evidence_page_base, layout)
         evidence_sources = [str(source) for source in _parse_list(row.get("evidence_sources"))]
         categories = normalize_categories(evidence_sources)
         if category_filter and category_filter not in categories:
