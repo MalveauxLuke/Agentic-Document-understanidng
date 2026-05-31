@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -110,6 +111,49 @@ class ColPaliRetriever(BaseRetriever):
     def _model_device(self):
         return getattr(self.model, "device", self.device)
 
+    def _target_device(self):
+        return self._model_device() if self.backend == "transformers" else self.device
+
+    def _move_embeddings_to_device(self, embeddings: Any):
+        if hasattr(embeddings, "to"):
+            return embeddings.to(self._target_device())
+        return embeddings
+
+    def _save_embedding_cache(self, cache_path: str | Path) -> None:
+        if self.image_embeddings is None:
+            return
+        path = Path(cache_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        embeddings = self.image_embeddings
+        if hasattr(embeddings, "detach"):
+            embeddings = embeddings.detach().cpu()
+        payload = {
+            "model_name_or_path": self.model_name_or_path,
+            "backend": self.backend,
+            "page_indices": [page.page_index for page in self.document_pages],
+            "embeddings": embeddings,
+        }
+        self.torch.save(payload, path)
+
+    def _load_embedding_cache(self, cache_path: str | Path, document_pages: list[DocumentPage]) -> bool:
+        path = Path(cache_path)
+        if not path.exists():
+            return False
+        try:
+            payload = self.torch.load(path, map_location="cpu")
+        except TypeError:
+            payload = self.torch.load(path, map_location="cpu", weights_only=False)
+        except Exception:
+            return False
+        if not isinstance(payload, dict) or "embeddings" not in payload:
+            return False
+        expected_indices = [page.page_index for page in document_pages]
+        if payload.get("page_indices") != expected_indices:
+            return False
+        self.document_pages = list(document_pages)
+        self.image_embeddings = self._move_embeddings_to_device(payload["embeddings"])
+        return True
+
     def index(self, document_pages: list[DocumentPage]) -> None:
         self.document_pages = list(document_pages)
         if not self.document_pages:
@@ -126,6 +170,13 @@ class ColPaliRetriever(BaseRetriever):
         batch = self.processor.process_images(images).to(self.device)
         with self.torch.no_grad():
             self.image_embeddings = self.model(**batch)
+
+    def index_with_cache(self, document_pages: list[DocumentPage], embedding_cache_path: str | Path | None) -> None:
+        if embedding_cache_path is not None and self._load_embedding_cache(embedding_cache_path, document_pages):
+            return
+        self.index(document_pages)
+        if embedding_cache_path is not None:
+            self._save_embedding_cache(embedding_cache_path)
 
     def retrieve(self, question: str, top_k: int = 5) -> list[RetrievedPage]:
         if self.image_embeddings is None:

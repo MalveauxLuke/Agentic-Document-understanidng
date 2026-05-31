@@ -20,6 +20,8 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
         "mock",
         "--limit",
         "1",
+        "--qid",
+        "949",
         "--top_k",
         "1",
         "--output_dir",
@@ -102,6 +104,8 @@ def test_mmlongbench_eval_mock_smoke(tmp_path):
     assert "answer_extractor_model" in run_config
     assert "answer_extractor_base_url" in run_config
     assert run_config["pipeline_cache_version"] == metrics["pipeline_cache_version"]
+    assert run_config["qids"] == ["949"]
+    assert run_config["cache_dir"] == str(output_dir / "cache")
     assert run_config["region_refinement"] == metrics["region_refinement"]
     assert run_config["agent_source_fingerprint"] == metrics["agent_source_fingerprint"]
     assert run_config["thinking_model"] is None

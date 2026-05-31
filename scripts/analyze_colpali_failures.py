@@ -53,6 +53,11 @@ def _load_json(path: Path) -> Any:
         return json.load(f)
 
 
+def _run_config(run_dir: Path) -> dict[str, Any]:
+    path = run_dir / "run_config.json"
+    return _load_json(path) if path.exists() else {}
+
+
 def resolve_run_dir(run: str, run_root: Path) -> Path:
     candidate = Path(run).expanduser()
     if candidate.exists():
@@ -67,8 +72,23 @@ def resolve_run_dir(run: str, run_root: Path) -> Path:
 
 
 def _document_pages(run_dir: Path, document_id: str) -> dict[int, str]:
-    pages_json = run_dir / "cache" / "documents" / _safe_id(document_id) / "pages.json"
-    if not pages_json.exists():
+    run_config = _run_config(run_dir)
+    render_dpi = int(run_config.get("render_dpi") or 144)
+    cache_dirs = []
+    if run_config.get("cache_dir"):
+        cache_dirs.append(Path(str(run_config["cache_dir"])))
+    cache_dirs.append(run_dir / "cache")
+
+    candidates = []
+    for cache_dir in cache_dirs:
+        candidates.extend(
+            [
+                cache_dir / "documents" / f"dpi_{render_dpi}" / _safe_id(document_id) / "pages.json",
+                cache_dir / "documents" / _safe_id(document_id) / "pages.json",
+            ]
+        )
+    pages_json = next((path for path in candidates if path.exists()), None)
+    if pages_json is None:
         return {}
     pages: dict[int, str] = {}
     for page in _load_json(pages_json):

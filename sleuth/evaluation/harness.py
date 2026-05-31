@@ -10,8 +10,15 @@ from sleuth.agents.core_decision import CoreDecisionAgent
 from sleuth.agents.difficulty_assessment import DifficultyAssessmentAgent
 from sleuth.agents.page_screening import PageScreeningAgent
 from sleuth.agents.prompts import display_page_number
-from sleuth.documents.page_store import build_document_pages
 from sleuth.evaluation.answer_extraction import AnswerExtractor, HeuristicAnswerExtractor
+from sleuth.evaluation.cache_paths import (
+    colpali_embedding_cache_path,
+    legacy_document_cache_dir,
+    load_or_build_document_pages as load_or_build_cached_document_pages,
+    retrieval_cache_path,
+    safe_id,
+    short_hash,
+)
 from sleuth.evaluation.dataset import MMLongBenchExample
 from sleuth.evaluation.metrics import compute_metrics, compute_metrics_by_category, save_metrics_by_category_csv
 from sleuth.evaluation.scoring import eval_score
@@ -63,11 +70,11 @@ def _model_validate(model_cls, data: dict[str, Any]):
 
 
 def _safe_id(value: str) -> str:
-    return "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
+    return safe_id(value)
 
 
 def _short_hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return short_hash(value)
 
 
 def compute_agent_source_fingerprint() -> str:
@@ -87,7 +94,7 @@ def _display_pages(page_indices: list[int]) -> list[int]:
 
 
 def _document_cache_dir(cache_dir: Path, doc_id: str) -> Path:
-    return cache_dir / "documents" / _safe_id(doc_id)
+    return legacy_document_cache_dir(cache_dir, doc_id)
 
 
 def load_or_build_document_pages(
@@ -96,19 +103,7 @@ def load_or_build_document_pages(
     cache_dir: Path,
     render_dpi: int,
 ) -> list[DocumentPage]:
-    doc_cache = ensure_dir(_document_cache_dir(cache_dir, doc_id))
-    pages_json = doc_cache / "pages.json"
-    pages_dir = doc_cache / "pages"
-
-    if pages_json.exists():
-        raw_pages = load_json(pages_json)
-        pages = [_model_validate(DocumentPage, item) for item in raw_pages]
-        if pages and all(Path(page.image_path).exists() for page in pages):
-            return pages
-
-    pages = build_document_pages(pdf_path, str(pages_dir), dpi=render_dpi)
-    save_json(pages_json, pages)
-    return pages
+    return load_or_build_cached_document_pages(pdf_path, doc_id, cache_dir, render_dpi)
 
 
 def _retrieval_cache_path(
@@ -116,9 +111,9 @@ def _retrieval_cache_path(
     example: MMLongBenchExample,
     retriever_name: str,
     top_k: int,
+    render_dpi: int = 144,
 ) -> Path:
-    key = _short_hash(f"{example.doc_id}\n{example.question}\n{retriever_name}\n{top_k}")
-    return cache_dir / "retrieval" / f"{_safe_id(example.doc_id)}_{key}.json"
+    return retrieval_cache_path(cache_dir, example, retriever_name, top_k, render_dpi)
 
 
 def load_or_run_retrieval(
@@ -128,13 +123,18 @@ def load_or_run_retrieval(
     retriever_name: str,
     top_k: int,
     cache_dir: Path,
+    render_dpi: int,
 ) -> list[RetrievedPage]:
-    cache_path = _retrieval_cache_path(cache_dir, example, retriever_name, top_k)
+    cache_path = retrieval_cache_path(cache_dir, example, retriever_name, top_k, render_dpi)
     if cache_path.exists():
         raw_pages = load_json(cache_path)
         return [_model_validate(RetrievedPage, item) for item in raw_pages]
 
-    retriever.index(pages)
+    embedding_cache_path = colpali_embedding_cache_path(cache_dir, retriever_name, render_dpi, example.doc_id)
+    if hasattr(retriever, "index_with_cache"):
+        retriever.index_with_cache(pages, embedding_cache_path)
+    else:
+        retriever.index(pages)
     retrieved_pages = retriever.retrieve(example.question, top_k=top_k)
     save_json(cache_path, retrieved_pages)
     return retrieved_pages
@@ -372,9 +372,10 @@ class MMLongBenchEvaluator:
         difficulty_model_switching_enabled: bool = False,
         thinking_model: str | None = None,
         agent_source_fingerprint: str | None = None,
+        cache_dir: str | Path | None = None,
     ) -> None:
         self.output_dir = ensure_dir(output_dir)
-        self.cache_dir = ensure_dir(self.output_dir / "cache")
+        self.cache_dir = ensure_dir(cache_dir if cache_dir is not None else self.output_dir / "cache")
         self.method = method
         self.retriever = retriever
         self.retriever_name = retriever_name
@@ -465,6 +466,7 @@ class MMLongBenchEvaluator:
             self.retriever_name,
             self.top_k,
             self.cache_dir,
+            self.render_dpi,
         )
 
         clue_outputs: list[ClueDiscoveryOutput] = []

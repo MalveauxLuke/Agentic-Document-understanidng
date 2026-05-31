@@ -19,6 +19,7 @@ from sleuth.evaluation.harness import (
     compute_agent_source_fingerprint,
     load_sol_instructions_if_needed,
 )
+from sleuth.evaluation.qid_filter import resolve_qids
 from sleuth.evaluation.reporting import print_results_summary
 from sleuth.llm.mock_client import MockClient
 from sleuth.llm.qwen_vl_client import QwenVLClient
@@ -36,8 +37,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_k", type=int, default=5)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--qid", action="append", default=None, help="Only run one question id; repeatable and comma-compatible")
+    parser.add_argument("--qid-file", default=None, help="JSON/list/text file of question ids to run")
     parser.add_argument("--category", default=None)
     parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--cache_dir", default=None, help="Shared cache directory for rendered pages, ColPali, retrieval, and agents")
     parser.add_argument("--mode", choices=["mock", "local", "sol"], default="sol")
     parser.add_argument("--render_dpi", type=int, default=144)
     parser.add_argument("--evidence-page-base", choices=["auto", "zero", "one", "0-based", "1-based"], default=None)
@@ -97,11 +101,13 @@ def main() -> None:
         or get_nested(config, ["model", "thinking_name_or_path"], "Qwen/Qwen3-VL-8B-Thinking")
     )
     agent_source_fingerprint = compute_agent_source_fingerprint()
+    qids = resolve_qids(args.qid, args.qid_file)
     examples = load_mmlongbench_examples(
         args.data_dir,
         limit=args.limit,
         category=args.category,
         evidence_page_base=evidence_page_base,
+        qids=qids,
     )
     if not examples:
         raise ValueError("No MMLongBench-Doc examples matched the requested filters.")
@@ -135,8 +141,11 @@ def main() -> None:
         "top_k": args.top_k,
         "temperature": args.temperature,
         "limit": args.limit,
+        "qids": sorted(qids) if qids else None,
+        "qid_file": args.qid_file,
         "category": args.category,
         "output_dir": args.output_dir,
+        "cache_dir": args.cache_dir or str(Path(args.output_dir) / "cache"),
         "render_dpi": args.render_dpi,
         "evidence_page_base": evidence_page_base,
         "num_examples": len(examples),
@@ -176,6 +185,7 @@ def main() -> None:
         difficulty_model_switching_enabled=difficulty_model_switching_enabled,
         thinking_model=str(thinking_model) if difficulty_model_switching_enabled else None,
         agent_source_fingerprint=agent_source_fingerprint,
+        cache_dir=args.cache_dir,
     )
     metrics = evaluator.run(examples, run_config)
     print(json.dumps(metrics, indent=2))

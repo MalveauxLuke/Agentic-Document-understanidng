@@ -11,6 +11,7 @@ def test_slurm_scripts_parse_with_bash():
         ROOT / "slurm" / "mmlongbench_eval_sleuth_sol.sbatch",
         ROOT / "slurm" / "mmlongbench_eval_sleuth_debug_sol.sbatch",
         ROOT / "slurm" / "mmlongbench_eval_base_sol.sbatch",
+        ROOT / "slurm" / "mmlongbench_colpali_cache_sol.sbatch",
         ROOT / "slurm" / "install_mmlongbench_doc.sbatch",
         ROOT / "slurm" / "sleuth_mmlongbench_doc_sol.sbatch",
         ROOT / "slurm" / "gdpo_debug_upstream.sbatch",

@@ -104,3 +104,35 @@ def test_category_normalization_and_filter(tmp_path):
 
     assert [example.question for example in none_examples] == ["q1"]
     assert [example.question for example in figure_examples] == ["q2"]
+
+
+def test_qid_filter_runs_before_limit(tmp_path):
+    data_dir = tmp_path / "mmlongbench"
+    documents_dir = data_dir / "data" / "documents"
+    documents_dir.mkdir(parents=True)
+    (documents_dir / "doc.pdf").write_bytes(b"%PDF-1.4\n")
+    rows = [
+        {
+            "question_id": "a",
+            "doc_id": "doc.pdf",
+            "question": "q-a",
+            "answer": "a",
+            "evidence_pages": "[]",
+            "evidence_sources": "[]",
+            "answer_format": "None",
+        },
+        {
+            "question_id": "b",
+            "doc_id": "doc.pdf",
+            "question": "q-b",
+            "answer": "b",
+            "evidence_pages": "[]",
+            "evidence_sources": "[]",
+            "answer_format": "None",
+        },
+    ]
+    (data_dir / "data" / "samples.json").write_text(json.dumps(rows), encoding="utf-8")
+
+    examples = load_mmlongbench_examples(data_dir, qids={"b"}, limit=1)
+
+    assert [example.question_id for example in examples] == ["b"]

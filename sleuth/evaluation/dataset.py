@@ -104,6 +104,7 @@ def load_mmlongbench_examples(
     limit: int | None = None,
     category: str | None = None,
     evidence_page_base: str = "auto",
+    qids: set[str] | None = None,
 ) -> list[MMLongBenchExample]:
     rows, documents_root, layout = resolve_dataset_layout(data_dir)
     examples: list[MMLongBenchExample] = []
@@ -120,6 +121,8 @@ def load_mmlongbench_examples(
 
         pdf_path = _resolve_pdf_path(row, documents_root, layout)
         question_id = str(row.get("question_id") or row.get("id") or effective_row_index)
+        if qids is not None and question_id not in qids:
+            continue
         examples.append(
             MMLongBenchExample(
                 question_id=question_id,

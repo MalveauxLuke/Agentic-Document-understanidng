@@ -140,6 +140,34 @@ ANSWER_EXTRACTOR_API_KEY=... LIMIT=3 sbatch slurm/mmlongbench_eval_sleuth_sol.sb
 ANSWER_EXTRACTOR_API_KEY=... LIMIT=3 sbatch slurm/mmlongbench_eval_base_sol.sbatch
 ```
 
+For fast prompt iteration, warm the shared ColPali cache once, then run selected
+QIDs from that cache:
+
+```bash
+python scripts/cache_mmlongbench_colpali.py \
+  --data_dir /scratch/$USER/agenticdocai/data/MMLongBench-Doc \
+  --cache_dir /scratch/$USER/agenticdocai/cache/mmlongbench_doc \
+  --retriever vidore/colpali-v1.3-hf \
+  --top_k 5 \
+  --render_dpi 144
+
+# Or submit the cache warmup on Sol:
+sbatch slurm/mmlongbench_colpali_cache_sol.sbatch
+
+python scripts/debug_clue_discovery.py \
+  --data_dir /scratch/$USER/agenticdocai/data/MMLongBench-Doc \
+  --cache_dir /scratch/$USER/agenticdocai/cache/mmlongbench_doc \
+  --qid-file configs/mmlongbench_diagnostic_qids.json \
+  --use-retrieved-pages \
+  --mode sol \
+  --output_dir /scratch/$USER/agenticdocai/debug_clue/prompt_run_001
+
+QIDS=13,15,18,19 \
+CACHE_DIR=/scratch/$USER/agenticdocai/cache/mmlongbench_doc \
+ANSWER_EXTRACTOR=openai_compatible \
+sbatch slurm/mmlongbench_eval_sleuth_sol.sbatch
+```
+
 For paper-comparable Sol runs, use the API extractor and the Difficulty-routed
 Thinking Core Decision path:
 

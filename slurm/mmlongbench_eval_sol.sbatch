@@ -53,6 +53,8 @@ METHOD="${METHOD:-sleuth}"
 MODE="${MODE:-sol}"
 DATA_DIR="${DATA_DIR:-${MMLONGBENCH_DOC_DIR:-/scratch/$USER/agenticdocai/data/MMLongBench-Doc}}"
 LIMIT="${LIMIT:-3}"
+QIDS="${QIDS:-}"
+QID_FILE="${QID_FILE:-}"
 CATEGORY="${CATEGORY:-}"
 TOP_K="${TOP_K:-5}"
 TEMPERATURE="${TEMPERATURE:-0.1}"
@@ -63,6 +65,7 @@ RENDER_DPI="${RENDER_DPI:-144}"
 ANSWER_EXTRACTOR="${ANSWER_EXTRACTOR:-auto}"
 EVIDENCE_PAGE_BASE="${EVIDENCE_PAGE_BASE:-auto}"
 OUT_DIR="${OUT_DIR:-/scratch/$USER/agenticdocai/runs/mmlongbench_eval_${METHOD}_${SLURM_JOB_ID:-manual}}"
+CACHE_DIR="${CACHE_DIR:-/scratch/$USER/agenticdocai/cache/mmlongbench_doc}"
 
 case "${METHOD}" in
   base|sleuth) ;;
@@ -126,10 +129,13 @@ echo "[mmlb-eval] retriever: ${RETRIEVER}"
 echo "[mmlb-eval] top_k: ${TOP_K}"
 echo "[mmlb-eval] temperature: ${TEMPERATURE}"
 echo "[mmlb-eval] limit: ${LIMIT}"
+echo "[mmlb-eval] qids: ${QIDS:-<none>}"
+echo "[mmlb-eval] qid file: ${QID_FILE:-<none>}"
 echo "[mmlb-eval] category: ${CATEGORY:-<none>}"
 echo "[mmlb-eval] answer extractor: ${ANSWER_EXTRACTOR}"
 echo "[mmlb-eval] evidence page base: ${EVIDENCE_PAGE_BASE}"
 echo "[mmlb-eval] out dir: ${OUT_DIR}"
+echo "[mmlb-eval] cache dir: ${CACHE_DIR}"
 echo "[mmlb-eval] python: ${PYTHON_BIN}"
 "${PYTHON_BIN}" -V
 
@@ -144,6 +150,7 @@ cmd=(
   --top_k "${TOP_K}"
   --temperature "${TEMPERATURE}"
   --output_dir "${OUT_DIR}"
+  --cache_dir "${CACHE_DIR}"
   --render_dpi "${RENDER_DPI}"
   --evidence-page-base "${EVIDENCE_PAGE_BASE}"
   --answer-extractor "${ANSWER_EXTRACTOR}"
@@ -151,6 +158,14 @@ cmd=(
 
 if [[ -n "${LIMIT}" && "${LIMIT}" != "ALL" && "${LIMIT}" != "all" && "${LIMIT}" != "NONE" && "${LIMIT}" != "none" ]]; then
   cmd+=(--limit "${LIMIT}")
+fi
+
+if [[ -n "${QIDS}" ]]; then
+  cmd+=(--qid "${QIDS}")
+fi
+
+if [[ -n "${QID_FILE}" ]]; then
+  cmd+=(--qid-file "${QID_FILE}")
 fi
 
 if [[ -n "${CATEGORY}" ]]; then
