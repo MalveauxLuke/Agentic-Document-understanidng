@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -12,31 +13,98 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sleuth.evaluation.cache_paths import load_cached_document_pages, load_cached_retrieval
 from sleuth.evaluation.categories import CANONICAL_CATEGORIES
 from sleuth.evaluation.dataset import MMLongBenchExample, load_mmlongbench_examples
 from sleuth.evaluation.qid_filter import resolve_qids
-from sleuth.schemas import RetrievedPage
-from sleuth.utils.file_utils import ensure_dir
 
 
 DEFAULT_TARGET_CATEGORIES = ["Chart", "Table", "Figure", "Pure-text", "Layout"]
+
+
+def _safe_id(value: str) -> str:
+    return "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
+
+
+def _short_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _dpi_key(render_dpi: int) -> str:
+    return f"dpi_{int(render_dpi)}"
+
+
+def _retrieval_cache_path(
+    cache_dir: Path,
+    example: MMLongBenchExample,
+    retriever_name: str,
+    top_k: int,
+    render_dpi: int,
+) -> Path:
+    key = _short_hash(
+        "\n".join(
+            [
+                str(example.doc_id),
+                str(example.question),
+                str(retriever_name),
+                str(top_k),
+                str(render_dpi),
+            ]
+        )
+    )
+    return cache_dir / "retrieval" / _dpi_key(render_dpi) / f"{_safe_id(example.doc_id)}_{key}.json"
+
+
+def _load_cached_retrieval(
+    cache_dir: Path,
+    example: MMLongBenchExample,
+    retriever_name: str,
+    top_k: int,
+    render_dpi: int,
+) -> list[dict[str, Any]] | None:
+    path = _retrieval_cache_path(cache_dir, example, retriever_name, top_k, render_dpi)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_cached_document_pages(
+    cache_dir: Path,
+    doc_id: str,
+    render_dpi: int,
+) -> list[dict[str, Any]] | None:
+    for candidate_dir in (
+        cache_dir / "documents" / _dpi_key(render_dpi) / _safe_id(doc_id),
+        cache_dir / "documents" / _safe_id(doc_id),
+    ):
+        pages_json = candidate_dir / "pages.json"
+        if pages_json.exists():
+            return json.loads(pages_json.read_text(encoding="utf-8"))
+    return None
 
 
 def _display_pages(pages: list[int]) -> list[int]:
     return [page + 1 for page in pages]
 
 
-def _retrieved_payload(retrieved: list[RetrievedPage]) -> list[dict[str, Any]]:
+def _page_index(page: dict[str, Any]) -> int:
+    return int(page["page_index"])
+
+
+def _page_score(page: dict[str, Any]) -> float:
+    return float(page.get("score", 0.0))
+
+
+def _retrieved_payload(retrieved: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for rank, page in enumerate(retrieved, start=1):
+        page_index = _page_index(page)
         rows.append(
             {
                 "rank": rank,
-                "page_index": page.page_index,
-                "display_page": page.page_index + 1,
-                "score": page.score,
-                "reason": page.reason,
+                "page_index": page_index,
+                "display_page": page_index + 1,
+                "score": _page_score(page),
+                "reason": page.get("reason"),
             }
         )
     return rows
@@ -48,26 +116,26 @@ def _page_image_paths(
     render_dpi: int,
     page_indices: list[int],
 ) -> dict[str, str]:
-    pages = load_cached_document_pages(example.doc_id, cache_dir, render_dpi)
+    pages = _load_cached_document_pages(cache_dir, example.doc_id, render_dpi)
     if not pages:
         return {}
-    by_index = {page.page_index: page.image_path for page in pages}
+    by_index = {int(page["page_index"]): str(page["image_path"]) for page in pages}
     return {str(page_index): by_index[page_index] for page_index in page_indices if page_index in by_index}
 
 
 def _candidate_record(
     example: MMLongBenchExample,
-    retrieved: list[RetrievedPage],
+    retrieved: list[dict[str, Any]],
     cache_dir: Path,
     render_dpi: int,
 ) -> dict[str, Any]:
-    retrieved_pages = [page.page_index for page in retrieved]
+    retrieved_pages = [_page_index(page) for page in retrieved]
     gold_pages = sorted(set(example.evidence_pages))
     retrieved_set = set(retrieved_pages)
     gold_rank = {
-        page.page_index: rank
+        _page_index(page): rank
         for rank, page in enumerate(retrieved, start=1)
-        if page.page_index in set(gold_pages)
+        if _page_index(page) in set(gold_pages)
     }
     return {
         "question_id": example.question_id,
@@ -202,7 +270,8 @@ def main() -> None:
     parser.add_argument("--evidence-page-base", default="auto")
     args = parser.parse_args()
 
-    output_dir = ensure_dir(args.output_dir)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     cache_dir = Path(args.cache_dir)
     qids = resolve_qids(args.qid, args.qid_file)
     category_filters = set(args.category or [])
@@ -223,7 +292,7 @@ def main() -> None:
     for example in examples:
         if category_filters and not (set(example.categories) & category_filters):
             continue
-        retrieved = load_cached_retrieval(cache_dir, example, args.retriever, args.top_k, args.render_dpi)
+        retrieved = _load_cached_retrieval(cache_dir, example, args.retriever, args.top_k, args.render_dpi)
         if retrieved is None:
             missing_retrieval.append({"question_id": example.question_id, "doc_id": example.doc_id, "question": example.question})
             continue
