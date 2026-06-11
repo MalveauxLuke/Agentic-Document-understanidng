@@ -1,0 +1,52 @@
+{
+  "name": "ColPali V1 anchor-plus-one-below visual retrieval corpus",
+  "description": "Compact experiment bundle containing visual MMLongBench questions and only Docling reading-order V1 anchor-plus-one-below canvases. Full document pages and their ColPali embeddings are loaded from the shared SOL cache.",
+  "question_count": 24,
+  "question_ids": [
+    "11",
+    "206",
+    "210",
+    "212",
+    "1",
+    "1015",
+    "143",
+    "198",
+    "286",
+    "293",
+    "294",
+    "258",
+    "296",
+    "317",
+    "223",
+    "229",
+    "259",
+    "295",
+    "303",
+    "322",
+    "332",
+    "351",
+    "352",
+    "363"
+  ],
+  "modality_filter": [
+    "Chart",
+    "Figure",
+    "Table"
+  ],
+  "modality_counts_overlapping": {
+    "Chart": 11,
+    "Figure": 7,
+    "Table": 13
+  },
+  "canvas_count": 171,
+  "canvas_bytes": 21339108,
+  "method": "reading_order",
+  "view_type": "V1_anchor_plus_1_below",
+  "anchor_types": [
+    "figure",
+    "table"
+  ],
+  "requires_shared_full_page_cache": true,
+  "expected_render_dpi": 144,
+  "expected_retriever": "vidore/colpali-v1.3-hf"
+}
