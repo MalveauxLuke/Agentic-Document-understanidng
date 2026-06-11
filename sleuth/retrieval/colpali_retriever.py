@@ -22,10 +22,12 @@ class ColPaliRetriever(BaseRetriever):
         model_name_or_path: str = "vidore/colpali-v1.3-hf",
         device: str = "cuda",
         top_k_default: int = 5,
+        index_batch_size: int = 2,
     ) -> None:
         self.model_name_or_path = model_name_or_path
         self.device = device
         self.top_k_default = top_k_default
+        self.index_batch_size = max(1, int(index_batch_size))
         self.document_pages: list[DocumentPage] = []
         self.image_embeddings = None
         self.backend = "transformers"
@@ -119,6 +121,13 @@ class ColPaliRetriever(BaseRetriever):
             return embeddings.to(self._target_device())
         return embeddings
 
+    def _combine_batch_embeddings(self, batch_embeddings: list[Any]):
+        if not batch_embeddings:
+            return None
+        if len(batch_embeddings) == 1:
+            return batch_embeddings[0]
+        return self.torch.cat(batch_embeddings, dim=0)
+
     def _save_embedding_cache(self, cache_path: str | Path) -> None:
         if self.image_embeddings is None:
             return
@@ -160,16 +169,28 @@ class ColPaliRetriever(BaseRetriever):
             self.image_embeddings = None
             return
 
-        images = [Image.open(Path(page.image_path)).convert("RGB") for page in self.document_pages]
-        if self.backend == "transformers":
-            batch = self.processor(images=images, return_tensors="pt").to(self._model_device())
-            with self.torch.no_grad():
-                self.image_embeddings = self.model(**batch).embeddings
-            return
+        embeddings = []
+        for start in range(0, len(self.document_pages), self.index_batch_size):
+            batch_pages = self.document_pages[start : start + self.index_batch_size]
+            images = []
+            try:
+                for page in batch_pages:
+                    with Image.open(Path(page.image_path)) as image:
+                        images.append(image.convert("RGB"))
 
-        batch = self.processor.process_images(images).to(self.device)
-        with self.torch.no_grad():
-            self.image_embeddings = self.model(**batch)
+                if self.backend == "transformers":
+                    batch = self.processor(images=images, return_tensors="pt").to(self._model_device())
+                    with self.torch.no_grad():
+                        embeddings.append(self.model(**batch).embeddings)
+                else:
+                    batch = self.processor.process_images(images).to(self.device)
+                    with self.torch.no_grad():
+                        embeddings.append(self.model(**batch))
+            finally:
+                for image in images:
+                    image.close()
+
+        self.image_embeddings = self._combine_batch_embeddings(embeddings)
 
     def index_with_cache(self, document_pages: list[DocumentPage], embedding_cache_path: str | Path | None) -> None:
         if embedding_cache_path is not None and self._load_embedding_cache(embedding_cache_path, document_pages):

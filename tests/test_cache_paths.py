@@ -4,6 +4,8 @@ import pickle
 from pathlib import Path
 from types import SimpleNamespace
 
+from PIL import Image
+
 from sleuth.evaluation.cache_paths import (
     colpali_embedding_cache_path,
     document_cache_dir,
@@ -34,6 +36,9 @@ def _example(question: str = "Question?") -> MMLongBenchExample:
 def test_dpi_aware_document_and_retrieval_cache_paths(tmp_path):
     assert document_cache_dir(tmp_path, "doc.pdf", 144) == tmp_path / "documents" / "dpi_144" / "doc_pdf"
 
+    embedding_path = colpali_embedding_cache_path(tmp_path, "vidore/colpali-v1.3-hf", 144, "doc.pdf")
+    assert "batch" not in str(embedding_path)
+
     path_144 = retrieval_cache_path(tmp_path, _example(), "vidore/colpali-v1.3-hf", 5, 144)
     path_180 = retrieval_cache_path(tmp_path, _example(), "vidore/colpali-v1.3-hf", 5, 180)
     path_top10 = retrieval_cache_path(tmp_path, _example(), "vidore/colpali-v1.3-hf", 10, 144)
@@ -63,6 +68,13 @@ class FakeTensor:
 
 
 class FakeTorch:
+    class no_grad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
     @staticmethod
     def save(payload, path: str | Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +86,17 @@ class FakeTorch:
         _ = map_location
         with Path(path).open("rb") as f:
             return pickle.load(f)
+
+    @staticmethod
+    def cat(tensors, dim=0):
+        _ = dim
+        values = []
+        for tensor in tensors:
+            if isinstance(tensor.value, list):
+                values.extend(tensor.value)
+            else:
+                values.append(tensor.value)
+        return FakeTensor(values)
 
 
 def _fake_retriever(index_calls: list[int]) -> ColPaliRetriever:
@@ -112,3 +135,57 @@ def test_colpali_index_with_cache_saves_then_loads_without_reencoding(tmp_path):
     assert second_calls == []
     assert second.image_embeddings.value == "encoded-pages"
     assert second.image_embeddings.device == "cuda:0"
+
+
+class FakeBatch(dict):
+    def to(self, device):
+        self["device"] = str(device)
+        return self
+
+
+class FakeProcessor:
+    def __call__(self, *, images, return_tensors):
+        assert return_tensors == "pt"
+        return FakeBatch(
+            {
+                "batch_size": len(images),
+                "values": [image.getpixel((0, 0))[0] for image in images],
+            }
+        )
+
+
+class FakeBatchModel:
+    device = "cpu"
+
+    def __init__(self):
+        self.batch_sizes: list[int] = []
+
+    def __call__(self, **batch):
+        self.batch_sizes.append(batch["batch_size"])
+        return SimpleNamespace(embeddings=FakeTensor(batch["values"]))
+
+
+def test_colpali_index_batches_page_images_and_preserves_order(tmp_path):
+    pages = []
+    for index in range(5):
+        image_path = tmp_path / f"page_{index}.png"
+        Image.new("RGB", (2, 2), (index, 0, 0)).save(image_path)
+        pages.append(DocumentPage(page_index=index, image_path=str(image_path)))
+
+    retriever = object.__new__(ColPaliRetriever)
+    retriever.model_name_or_path = "vidore/colpali-v1.3-hf"
+    retriever.device = "cpu"
+    retriever.top_k_default = 5
+    retriever.index_batch_size = 2
+    retriever.document_pages = []
+    retriever.image_embeddings = None
+    retriever.backend = "transformers"
+    retriever.torch = FakeTorch
+    retriever.processor = FakeProcessor()
+    retriever.model = FakeBatchModel()
+
+    retriever.index(pages)
+
+    assert retriever.model.batch_sizes == [2, 2, 1]
+    assert retriever.document_pages == pages
+    assert retriever.image_embeddings.value == [0, 1, 2, 3, 4]
