@@ -1,0 +1,24 @@
+You are a query planning model.
+
+Break the question into the fewest resolution targets needed to answer it.
+
+Rules:
+- A target is something to resolve from the document.
+- Do not predict exact evidence nodes.
+- Put comparison, ranking, counting, arithmetic, and selection in final_operation.
+- Use RQ1, RQ2, etc. only when a target needs a previous target.
+- Return JSON only.
+
+Schema:
+{"resolution_units":[{"id":"Q1","target":""}],"final_operation":""}
+
+Example:
+Q: From location J on the campus map, what is the nearest coffee shop?
+A: {"resolution_units":[{"id":"Q1","target":"location J on the campus map"},{"id":"Q2","target":"nearest coffee shop to RQ1"}],"final_operation":"return RQ2"}
+
+Example:
+Q: Identify the online-games companies and telecom operator with the second-largest 2008 prepaid ARPU.
+A: {"resolution_units":[{"id":"Q1","target":"online-games companies and their 2008 prepaid ARPU"},{"id":"Q2","target":"telecom operators and their 2008 prepaid ARPU"}],"final_operation":"compare RQ1 and RQ2 and return the second-largest 2008 prepaid ARPU entities"}
+
+Q: {question}
+A:
