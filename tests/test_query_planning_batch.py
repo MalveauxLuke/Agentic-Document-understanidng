@@ -1,0 +1,48 @@
+from pathlib import Path
+
+from scripts.run_query_planning_batch import render_prompt
+
+
+EXPECTED_PROMPT = """You are a query planning model.
+
+Break the question into the fewest resolution targets needed to answer it.
+
+Rules:
+- A target is something to resolve from the document.
+- Do not predict exact evidence nodes.
+- Put comparison, ranking, counting, arithmetic, and selection in final_operation.
+- Do not create extra targets for highest, lowest, second-largest, most, least, count, sum, difference, or ratio.
+- Use RQ1, RQ2, etc. only when a target needs a previous target.
+- Return JSON only.
+
+Schema:
+{"resolution_units":[{"id":"Q1","target":""}],"final_operation":""}
+
+Example:
+Q: From location J on the campus map, what is the nearest coffee shop?
+A: {"resolution_units":[{"id":"Q1","target":"location J on the campus map"},{"id":"Q2","target":"nearest coffee shop to RQ1"}],"final_operation":"return RQ2"}
+
+Example:
+Q: Identify the online-games companies and telecom operator with the second-largest 2008 prepaid ARPU.
+A: {"resolution_units":[{"id":"Q1","target":"online-games companies and their 2008 prepaid ARPU"},{"id":"Q2","target":"telecom operators and their 2008 prepaid ARPU"}],"final_operation":"compare RQ1 and RQ2 and return the second-largest 2008 prepaid ARPU entities"}
+
+Example:
+Q: A reviewer claims: “The vendor is allowed to use customer data for model training under this agreement.” Does the contract support that claim?
+A: {"resolution_units":[{"id":"Q1","target":"contract provisions allowing, restricting, or conditioning vendor use of customer data for model training"}],"final_operation":"determine whether RQ1 supports the claim"}
+
+Q: {question}
+A:"""
+
+
+def test_query_planning_prompt_is_exact():
+    prompt_path = Path("prompts/query_planning_exact.txt")
+    actual = prompt_path.read_text(encoding="utf-8")
+    if actual.endswith("\n"):
+        actual = actual[:-1]
+    assert actual == EXPECTED_PROMPT
+
+
+def test_query_planning_prompt_replaces_only_question():
+    rendered = render_prompt(EXPECTED_PROMPT, "Which page contains the table?")
+    assert rendered.endswith("Q: Which page contains the table?\nA:")
+    assert "{question}" not in rendered
